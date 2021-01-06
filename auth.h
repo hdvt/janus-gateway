@@ -19,7 +19,7 @@
 #define JANUS_AUTH_H
 
 #include <glib.h>
-
+#include <jwt.h>
 #include "plugins/plugin.h"
 
 /*! \brief Method to initializing the token based authentication
@@ -84,5 +84,8 @@ GList *janus_auth_list_plugins(const char *token);
  * @param[in] plugin Opaque pointer to the janus_plugin instance this token can not access anymore
  * @returns TRUE if the operation was successful, FALSE otherwise */
 gboolean janus_auth_disallow_plugin(const char *token, janus_plugin *plugin);
+
+const char* janus_auth_jwt_verify(const char *token);
+
 
 #endif

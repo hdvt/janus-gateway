@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BÒN</title>
+  <script type="text/javascript" src="js/adapter.min.js"></script>
+  <script type="text/javascript" src="js/jquery.min.js"></script>
+  <script type="text/javascript" src="js/jquery.blockUI.min.js"></script>
+  <script type="text/javascript" src="js/bootstrap.min.js"></script>
+  <script type="text/javascript" src="js/bootbox.min.js"></script>
+  <script type="text/javascript" src="js/spin.min.js"></script>
+  <script type="text/javascript" src="js/toastr.min.js"></script>
+  <script type="text/javascript" src="js/draggabilly.pkgd.min.js"></script>
+  <script type="text/javascript" src="com-sdk.js"></script>
+
+
+  <link rel="stylesheet" href="css/bootstrap.min.css" type="text/css" />
+  <link rel="stylesheet" href="css/demo.css" type="text/css" />
+  <!-- <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.6.2/css/font-awesome.min.css"
+    type="text/css" /> -->
+  <link rel="stylesheet" href="css/toastr.css" />
+  <script>
+    var username;
+    var videoInput;
+    var videoOutput;
+    var localstream;
+    var videocall;
+    var comClient;
+	var comCall;
+	var token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwidXNlcl9pZCI6IjEiLCJpYXQiOjE1MTYyMzkwMjJ9.jJzsQhXnLdQ2Rh-Uap2hpHt2Ap4Wy9nBb4KLtSUVRFg";
+    $(document).ready(function () {
+      videoInput = document.getElementById('myvideo');
+      videoOutput = document.getElementById('remotevideo');
+      user_id = "bon";
+      $('#youok').removeClass('hide').show().html("Registered as '" + user_id + "'");
+      $('#phone').removeClass('hide').show();
+      $('#call').unbind('click').click(doCall);
+      $('#peer').focus();
+      $('#peer').attr('disabled', true);
+      comClient = new ComClient();
+      settingEventClient(comClient);
+      comClient.connect(token);
+    });
+
+    function settingEventClient(comClient) {
+      comClient.on('connected', (res) => {
+        console.log("Connected ComServer: ", res);
+        console.log("User " + user_id + "connected!")
+      });
+      comClient.on('incomingcall', (comCall) => {
+        settingEventCall(comCall);
+        bootbox.hideAll();
+        $('#peer').val(comCall.from_user).attr('disabled', true);
+        incoming = bootbox.dialog({
+          message: "Incoming call from " + comCall.from_user + "!",
+          title: "Incoming call",
+          closeButton: false,
+          buttons: {
+            success: {
+              label: "Answer",
+              className: "btn-success",
+              callback: function () {
+                openStreamAction();
+                setTimeout(() => {
+                   $('#peer').val(comCall.from_user).attr('disabled', true);
+                // videoInput.play();
+                comCall.answer(
+                  {
+                    stream: localStream,
+                  }, {
+                  success: function () {
+                    $('#peer').attr('disabled', true);
+                    $('#call').removeAttr('disabled').html('Hangup')
+                      .removeClass("btn-success").addClass("btn-danger")
+                      .unbind('click').click(doHangup);
+                  },
+                  error: function (error) {
+                    bootbox.alert("Could not answer: " + error);
+                  }
+                });
+                }, 1000);
+
+
+               
+              }
+            },
+            danger: {
+              label: "Decline",
+              className: "btn-danger",
+              callback: function () {
+                videocall.reject();
+              }
+            }
+          }
+        });
+      });
+    }
+
+    function settingEventCall(videocall) {
+      videocall.on('callstate', function (data) {
+        switch (data.call_state) {
+          case "CALLING": {
+            bootbox.alert("Waiting for the peer to answer...");
+            break;
+          }
+          case "ACCEPTED": {
+            // console.debug("videocall.on(answer)");
+            bootbox.hideAll();
+            $('#call').removeAttr('disabled').html('Hangup')
+              .removeClass("btn-success").addClass("btn-danger")
+              .unbind('click').click(doHangup);
+            break;
+          }
+          case "STOP": {
+            videoInput.srcObject = null;
+            videoOutput.srcObject = null;
+            $('#peer').removeAttr('disabled').val('');
+            $('#call').removeAttr('disabled').html('Call')
+              .removeClass("btn-danger").addClass("btn-success")
+              .unbind('click').click(doCall);
+            bootbox.hideAll();
+          }
+        }
+      });
+      videocall.on('addlocalstream', function (stream) {
+        console.log("addlocalstream: " + stream);
+        // videoOutput.srcObject = null;
+        // try {
+        // 	videoOutput.srcObject = stream;
+        // } catch (e) {
+        // 	try {
+        // 		videoOutput.src = URL.createObjectURL(stream);
+        // 	} catch (e) {
+        // 		Janus.error("Error attaching stream to element");
+        // 	}
+        // }
+      });
+      videocall.on('addremotestream', function (stream) {
+        console.log("addremotestream: ", stream.getVideoTracks());
+        videoOutput.srcObject = null;
+        try {
+          videoOutput.srcObject = stream;
+        } catch (e) {
+          try {
+            videoOutput.src = URL.createObjectURL(stream);
+          } catch (e) {
+            Janus.error("Error attaching stream to element");
+          }
+        }
+        $('#toggleaudio').html("Disable audio").removeClass("btn-success").addClass("btn-danger")
+          .unbind('click').removeAttr('disabled').click(
+            function () {
+              videocall.audioenabled = !videocall.audioenabled;
+              if (videocall.audioenabled)
+                console.log("self.audioenabled");
+              if (videocall.audioenabled)
+                $('#toggleaudio').html("Disable audio").removeClass("btn-success").addClass("btn-danger");
+              else
+                $('#toggleaudio').html("Enable audio").removeClass("btn-danger").addClass("btn-success");
+              videocall.mute(videocall.audioenabled);
+            });
+        $('#togglevideo').html("Disable video").removeClass("btn-success").addClass("btn-danger")
+          .unbind('click').removeAttr('disabled').click(
+            function () {
+              videocall.videoenabled = !videocall.videoenabled;
+              if (videocall.videoenabled)
+                $('#togglevideo').html("Disable video").removeClass("btn-success").addClass("btn-danger");
+              else
+                $('#togglevideo').html("Enable video").removeClass("btn-danger").addClass("btn-success");
+              videocall.enableVideo(videocall.videoenabled);
+            });
+        $('#toggleaudio').parent().removeClass('hide').show();
+      });
+      videocall.on('incomingcall', function (peername) {
+        bootbox.hideAll();
+        $('#peer').val(peername).attr('disabled', true);
+        incoming = bootbox.dialog({
+          message: "Incoming call from " + peername + "!",
+          title: "Incoming call",
+          closeButton: false,
+          buttons: {
+            success: {
+              label: "Answer",
+              className: "btn-success",
+              callback: function () {
+                $('#peer').val(peername).attr('disabled', true);
+                // videoInput.play();
+                videocall.answer({
+                  stream: localStream,
+                  success: function () {
+                    $('#peer').attr('disabled', true);
+                    $('#call').removeAttr('disabled').html('Hangup')
+                      .removeClass("btn-success").addClass("btn-danger")
+                      .unbind('click').click(doHangup);
+                  },
+                  error: function (error) {
+                    bootbox.alert("Could not answer: " + error);
+                  }
+                });
+              }
+            },
+            danger: {
+              label: "Decline",
+              className: "btn-danger",
+              callback: function () {
+                videocall.reject();
+              }
+            }
+          }
+        });
+      });
+    }
+
+    // functions
+    function register(username, callback) {
+      videocall.register(username, {
+        success: function () {
+          callback.success();
+        },
+        error: function (error) {
+          callback.success(error);
+        }
+      });
+    }
+
+    function openStreamAction() {
+      videoInput.src = "data/video.webm";
+      videoInput.play();
+      const fps = 0;
+      if (videoInput.captureStream) {
+        localStream = videoInput.captureStream(fps);
+      } else if (videoInput.mozCaptureStream) {
+        localStream = videoInput.mozCaptureStream(fps);
+      } else {
+        console.error('Stream capture is not supported');
+        localStream = null;
+      }
+      if (localStream) {
+        console.log('Received local stream.');
+      }
+    }
+
+    function doCall() {      // Call someone
+      openStreamAction();
+      setTimeout(() => {
+        var peer_id = $('#peer').val();
+        if (peer_id === "") {
+          bootbox.alert("Insert a username to call (e.g., pluto)");
+          $('#peer').removeAttr('disabled');
+          $('#call').removeAttr('disabled').click(doCall);
+          return;
+        }
+        if (/[^a-zA-Z0-9]/.test(peer_id)) {
+          bootbox.alert('Input is not alphanumeric');
+          $('#peer').removeAttr('disabled').val("");
+          $('#call').removeAttr('disabled').click(doCall);
+          return;
+        }
+        // videoInput.play();
+        comCall = new ComCall(comClient, "bon", peer_id);
+        settingEventCall(comCall);
+        var options = {
+          stream: localStream,
+          isVideoCall: true
+          // isRecording: true,
+          // duration: 5
+        };
+        comCall.makeCall(options, (res) => {
+
+        })
+      }, 1000);
+      // $('#call').attr('disabled', true).unbind('click');
+
+    }
+    function doHangup() {
+      videocall.hangup();
+    }
+
+
+  </script>
+</head>
+
+<body>
+  <div class="container">
+    <div class="row">
+      <div class="page-header">
+        <h1>Video Call
+        </h1>
+      </div>
+
+      <div class="container" id="videocall">
+        <div class="row">
+          <div class="col-md-6 container" id="login">
+            <span class="hide label label-info" id="youok"></span>
+          </div>
+          <div class="col-md-12">
+            <div class="col-md-6 container hide" id="phone">
+              <div class="input-group margin-bottom-sm">
+                <span class="input-group-addon"><i class="fa fa-phone fa-fw"></i></span>
+                <input class="form-control" type="text" placeholder="Who should we call?" autocomplete="off" id="peer"
+                  value="y"></input>
+              </div>
+              <button class="btn btn-success margin-bottom-sm" autocomplete="off" id="call">Call</button>
+            </div>
+          </div>
+        </div>
+
+        <div id="videos">
+          <!-- Local stream -->
+          <div class="col-md-6">
+            <div class="panel panel-default">
+              <div class="panel-heading">
+                <h3 class="panel-title">Local Stream
+                  <div class="btn-group btn-group-xs pull-right hide">
+                    <button class="btn btn-danger" autocomplete="off" id="toggleaudio">Disable
+                      audio</button>
+                    <button class="btn btn-danger" autocomplete="off" id="togglevideo">Disable
+                      video</button>
+                  </div>
+                </h3>
+              </div>
+              <div class="panel-body" id="videoleft">
+                <video class="rounded centered" id="myvideo" muted loop playsinline />'
+              </div>
+            </div>
+          </div>
+          <!-- Remote stream -->
+          <div class="col-md-6">
+            <div class="panel panel-default">
+              <div class="panel-heading">
+                <h3 class="panel-title">Remote Stream</h3>
+              </div>
+              <div class="panel-body" id="videoright">
+                <video class="rounded centered" id="remotevideo" autoplay playsinline />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+
+</html>

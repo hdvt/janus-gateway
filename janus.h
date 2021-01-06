@@ -36,16 +36,18 @@
 #include "loggers/logger.h"
 #include "plugins/plugin.h"
 
-
-#define JANUS_BUFSIZE	8192
+#define JANUS_BUFSIZE 8192
 
 /*! \brief Helper to address requests and their sources (e.g., a specific HTTP connection, websocket, RabbitMQ or others) */
 typedef struct janus_request janus_request;
 
 /*! \brief Janus Core-Client session */
-typedef struct janus_session {
+typedef struct janus_session
+{
 	/*! \brief Janus Core-Client session ID */
 	guint64 session_id;
+	/*! \brief ComServer User ID */
+	gchar *user_id;
 	/*! \brief Map of handles this session is managing */
 	GHashTable *ice_handles;
 	/*! \brief Time of the last activity on the session */
@@ -63,7 +65,6 @@ typedef struct janus_session {
 	/*! \brief Reference counter for this instance */
 	janus_refcount ref;
 } janus_session;
-
 
 /** @name Janus Core-Client session methods
  */
@@ -107,7 +108,6 @@ void janus_session_handles_clear(janus_session *session);
 json_t *janus_session_handles_list_json(janus_session *session);
 ///@}
 
-
 /** @name Janus request processing
  * \details Since messages may come from different sources (plain HTTP,
  * WebSockets, RabbitMQ and potentially even more in the future), we
@@ -116,7 +116,8 @@ json_t *janus_session_handles_list_json(janus_session *session);
  */
 ///@{
 /*! \brief Helper to address requests and their sources (e.g., a specific HTTP connection, websocket, RabbitMQ or others) */
-struct janus_request {
+struct janus_request
+{
 	/*! \brief Pointer to the transport plugin */
 	janus_transport *transport;
 	/*! \brief Pointer to the transport-provided session instance */
@@ -172,7 +173,6 @@ int janus_process_success(janus_request *request, json_t *payload);
  */
 int janus_process_error(janus_request *request, uint64_t session_id, const char *transaction, gint error, const char *format, ...) G_GNUC_PRINTF(5, 6);
 ///@}
-
 
 /** @name Janus transport plugin management
  * The core doesn't support any transport for the Janus API by default.
@@ -267,7 +267,6 @@ janus_plugin *janus_plugin_find(const gchar *package);
 gchar *janus_get_server_pem(void);
 /*! \brief Helper method to return the path to the provided server certificate key */
 gchar *janus_get_server_key(void);
-
 
 /*! \brief Helper method to return the local IP address (autodetected by default) */
 gchar *janus_get_local_ip(void);

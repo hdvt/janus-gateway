@@ -346,6 +346,8 @@ PKG_CHECK_MODULES([JANUS],
                     libssl >= $ssl_version
                     libcrypto
                     zlib
+                    mysqlclient
+                    libjwt
                   ])
 JANUS_MANUAL_LIBS="${JANUS_MANUAL_LIBS} -lm"
 AC_SUBST(JANUS_MANUAL_LIBS)
@@ -521,7 +523,7 @@ PKG_CHECK_MODULES([MHD],
                   ])
 AC_SUBST([MHD_CFLAGS])
 AC_SUBST([MHD_LIBS])
-AM_CONDITIONAL([ENABLE_REST], [test "x$enable_rest" = "xyes"])
+AM_CONDITIONAL([ENABLE_REST], [test "x$enable_rest" = "xno"])
 AM_COND_IF([ENABLE_REST],
            [
              AC_CHECK_TYPES([enum MHD_Result],
@@ -554,7 +556,7 @@ AC_CHECK_LIB([websockets],
 					 [AC_MSG_ERROR([libwebsockets not found. See README.md for installation instructions or use --disable-websockets])])
 			 ])
 AM_CONDITIONAL([ENABLE_WEBSOCKETS], [test "x$enable_websockets" = "xyes"])
-AM_CONDITIONAL([ENABLE_WSEVH], [test "x$enable_websockets_event_handler" = "xyes"])
+AM_CONDITIONAL([ENABLE_WSEVH], [test "x$enable_websockets_event_handler" = "xno"])
 AC_SUBST(WS_MANUAL_LIBS)
 
 AC_CHECK_LIB([rabbitmq],
@@ -617,13 +619,13 @@ AC_CHECK_LIB([nanomsg],
                AS_IF([test "x$enable_nanomsg_event_handler" = "xyes"],
                      [AC_MSG_ERROR([nanomsg not found. See README.md for installation instructions or use --disable-nanomsg-event-handler])])
              ])
-AM_CONDITIONAL([ENABLE_RABBITMQ], [test "x$enable_rabbitmq" = "xyes"])
+AM_CONDITIONAL([ENABLE_RABBITMQ], [test "x$enable_rabbitmq" = "xno"])
 AM_CONDITIONAL([ENABLE_RABBITMQEVH], [test "x$enable_rabbitmq_event_handler" = "xyes"])
 AM_CONDITIONAL([ENABLE_MQTT], [test "x$enable_mqtt" = "xyes"])
 AM_CONDITIONAL([ENABLE_MQTTEVH], [test "x$enable_mqtt_event_handler" = "xyes"])
 AM_CONDITIONAL([ENABLE_NANOMSG], [test "x$enable_nanomsg" = "xyes"])
 AM_CONDITIONAL([ENABLE_NANOMSGEVH], [test "x$enable_nanomsg_event_handler" = "xyes"])
-AM_CONDITIONAL([ENABLE_GELFEVH], [test "x$enable_gelf_event_handler" = "xyes"])
+AM_CONDITIONAL([ENABLE_GELFEVH], [test "x$enable_gelf_event_handler" = "no"])
 
 AM_CONDITIONAL([ENABLE_JSONLOGGER], [test "x$enable_json_logger" = "xyes"])
 
@@ -648,7 +650,7 @@ AC_TRY_COMPILE([
                  AS_IF([test "x$enable_unix_sockets" = "xyes"],
                        [AC_MSG_ERROR([SOCK_SEQPACKET not defined in your OS. Use --disable-unix-sockets])])
                ])
-AM_CONDITIONAL([ENABLE_PFUNIX], [test "x$enable_unix_sockets" = "xyes"])
+AM_CONDITIONAL([ENABLE_PFUNIX], [test "x$enable_unix_sockets" = "no"])
 
 AS_IF([test "x$enable_systemd_sockets" = "xyes"],
       [PKG_CHECK_MODULES([LIBSYSTEMD],
@@ -668,6 +670,7 @@ PKG_CHECK_MODULES([PLUGINS],
                   [
                     glib-2.0 >= $glib_version
                     jansson >= $jansson_version
+                    nice
                   ])
 
 AC_ARG_ENABLE([plugin-audiobridge],
@@ -814,18 +817,18 @@ PKG_CHECK_MODULES([LUA],
 AC_SUBST([LUA_CFLAGS])
 AC_SUBST([LUA_LIBS])
 
-AM_CONDITIONAL([ENABLE_PLUGIN_AUDIOBRIDGE], [test "x$enable_plugin_audiobridge" = "xyes"])
-AM_CONDITIONAL([ENABLE_PLUGIN_DUKTAPE], [test "x$enable_plugin_duktape" = "xyes"])
-AM_CONDITIONAL([ENABLE_PLUGIN_ECHOTEST], [test "x$enable_plugin_echotest" = "xyes"])
-AM_CONDITIONAL([ENABLE_PLUGIN_LUA], [test "x$enable_plugin_lua" = "xyes"])
-AM_CONDITIONAL([ENABLE_PLUGIN_RECORDPLAY], [test "x$enable_plugin_recordplay" = "xyes"])
-AM_CONDITIONAL([ENABLE_PLUGIN_SIP], [test "x$enable_plugin_sip" = "xyes"])
-AM_CONDITIONAL([ENABLE_PLUGIN_NOSIP], [test "x$enable_plugin_nosip" = "xyes"])
-AM_CONDITIONAL([ENABLE_PLUGIN_STREAMING], [test "x$enable_plugin_streaming" = "xyes"])
+AM_CONDITIONAL([ENABLE_PLUGIN_AUDIOBRIDGE], [test "x$enable_plugin_audiobridge" = "no"])
+AM_CONDITIONAL([ENABLE_PLUGIN_DUKTAPE], [test "x$enable_plugin_duktape" = "no"])
+AM_CONDITIONAL([ENABLE_PLUGIN_ECHOTEST], [test "x$enable_plugin_echotest" = "no"])
+AM_CONDITIONAL([ENABLE_PLUGIN_LUA], [test "x$enable_plugin_lua" = "no"])
+AM_CONDITIONAL([ENABLE_PLUGIN_RECORDPLAY], [test "x$enable_plugin_recordplay" = "xno"])
+AM_CONDITIONAL([ENABLE_PLUGIN_SIP], [test "x$enable_plugin_sip" = "no"])
+AM_CONDITIONAL([ENABLE_PLUGIN_NOSIP], [test "x$enable_plugin_nosip" = "no"])
+AM_CONDITIONAL([ENABLE_PLUGIN_STREAMING], [test "x$enable_plugin_streaming" = "no"])
 AM_CONDITIONAL([ENABLE_PLUGIN_VIDEOCALL], [test "x$enable_plugin_videocall" = "xyes"])
-AM_CONDITIONAL([ENABLE_PLUGIN_VIDEOROOM], [test "x$enable_plugin_videoroom" = "xyes"])
-AM_CONDITIONAL([ENABLE_PLUGIN_VOICEMAIL], [test "x$enable_plugin_voicemail" = "xyes"])
-AM_CONDITIONAL([ENABLE_PLUGIN_TEXTROOM], [test "x$enable_plugin_textroom" = "xyes"])
+AM_CONDITIONAL([ENABLE_PLUGIN_VIDEOROOM], [test "x$enable_plugin_videoroom" = "no"])
+AM_CONDITIONAL([ENABLE_PLUGIN_VOICEMAIL], [test "x$enable_plugin_voicemail" = "no"])
+AM_CONDITIONAL([ENABLE_PLUGIN_TEXTROOM], [test "x$enable_plugin_textroom" = "no"])
 
 
 ##

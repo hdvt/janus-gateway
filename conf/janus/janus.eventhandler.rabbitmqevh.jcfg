@@ -1,7 +1,7 @@
 # This configures the RabbitMQ event handler.
 
 general: {
-	enabled = false					# By default the module is not enabled
+	enabled = true					# By default the module is not enabled
 	events = "all"					# Comma separated list of the events mask you're interested
 									# in. Valid values are none, sessions, handles, jsep, webrtc,
 									# media, plugins, transports, core, external and all. By
@@ -30,4 +30,10 @@ general: {
 	#ssl_cacert = "/path/to/cacert.pem"
 	#ssl_cert = "/path/to/cert.pem"
 	#ssl_key = "/path/to/key.pem"
+	event_exchange = "COM.event"
+	event_queue = "COM.event.media"
+	connect_exchange = "COM.connect"
+	heartbeat_exchange = "COM.heartbeat"
+	connect_queue = "COM.connect.media"
+	heartbeat_exchange = "COM.heartbeat.media"
 }

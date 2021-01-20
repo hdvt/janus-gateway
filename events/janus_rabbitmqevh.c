@@ -102,6 +102,14 @@ static amqp_channel_t rmq_channel = 0;
 static amqp_bytes_t rmq_exchange;
 static amqp_bytes_t rmq_route_key;
 
+static amqp_bytes_t rmq_event_exchange;
+static amqp_bytes_t rmq_connect_exchange;
+static amqp_bytes_t rmq_heartbeat_exchange;
+
+static amqp_bytes_t rmq_event_queue;
+static amqp_bytes_t rmq_connect_queue;
+static amqp_bytes_t rmq_heartbeat_queue;
+
 static janus_mutex mutex;
 
 static char *rmqhost = NULL;
@@ -113,6 +121,7 @@ static gboolean ssl_enable = FALSE;
 static gboolean ssl_verify_peer = FALSE;
 static gboolean ssl_verify_hostname = FALSE;
 static const char *route_key = NULL, *exchange = NULL, *exchange_type = NULL ;
+static const char *event_exchange = NULL, *connect_exchange = NULL, *heartbeat_exchange = NULL, *event_queue = NULL, *connect_queue = NULL, *heartbeat_queue = NULL;
 static uint16_t heartbeat = 0;
 static uint16_t rmqport = AMQP_PROTOCOL_PORT;
 
@@ -252,13 +261,6 @@ int janus_rabbitmqevh_init(const char *config_path) {
 	}
 
 	/* Parse configuration */
-	item = janus_config_get(config, config_general, janus_config_type_item, "route_key");
-	if(!item || !item->value) {
-		JANUS_LOG(LOG_FATAL, "RabbitMQEventHandler: Missing name of outgoing route_key for RabbitMQ...\n");
-		goto error;
-	}
-	route_key = g_strdup(item->value);
-
 	item = janus_config_get(config, config_general, janus_config_type_item, "exchange_type");
 	if(!item || !item->value) {
 		exchange_type = (char *)JANUS_RABBITMQEVH_EXCHANGE_TYPE;
@@ -266,17 +268,50 @@ int janus_rabbitmqevh_init(const char *config_path) {
 		exchange_type = g_strdup(item->value);
 	}
 
-	item = janus_config_get(config, config_general, janus_config_type_item, "exchange");
+	item = janus_config_get(config, config_general, janus_config_type_item, "event_exchange");
 	if(!item || !item->value) {
-		JANUS_LOG(LOG_INFO, "RabbitMQEventHandler: Missing name of outgoing exchange for RabbitMQ, using default\n");
+		JANUS_LOG(LOG_INFO, "RabbitMQEventHandler: Missing name of event_exchange for RabbitMQ\n");
+		goto error;
 	} else {
-		exchange = g_strdup(item->value);
+		event_exchange = g_strdup(item->value);
 	}
-	if (exchange == NULL) {
-		JANUS_LOG(LOG_INFO, "RabbitMQ event handler enabled, %s:%d (%s) exchange_type:%s\n", rmqhost, rmqport, route_key,exchange_type);
+	item = janus_config_get(config, config_general, janus_config_type_item, "event_queue");
+	if(!item || !item->value) {
+		JANUS_LOG(LOG_FATAL, "RabbitMQEventHandler: Missing name of outgoing connect_queue for RabbitMQ...\n");
+		goto error;
+	}
+	event_queue = g_strdup(item->value);
+
+	item = janus_config_get(config, config_general, janus_config_type_item, "connect_exchange");
+	if(!item || !item->value) {
+		JANUS_LOG(LOG_INFO, "RabbitMQEventHandler: Missing name of connect_exchange for RabbitMQ\n");
+		goto error;
 	} else {
-		JANUS_LOG(LOG_INFO, "RabbitMQ event handler enabled, %s:%d (%s) exch: (%s) exchange_type:%s\n", rmqhost, rmqport, route_key, exchange,exchange_type);
+		connect_exchange = g_strdup(item->value);
 	}
+	item = janus_config_get(config, config_general, janus_config_type_item, "connect_queue");
+	if(!item || !item->value) {
+		JANUS_LOG(LOG_FATAL, "RabbitMQEventHandler: Missing name of outgoing connect_queue for RabbitMQ...\n");
+		goto error;
+	}
+	connect_queue = g_strdup(item->value);
+
+	item = janus_config_get(config, config_general, janus_config_type_item, "heartbeat_exchange");
+	if(!item || !item->value) {
+		JANUS_LOG(LOG_INFO, "RabbitMQEventHandler: Missing name of heartbeat_exchange for RabbitMQ\n");
+		goto error;
+	} else {
+		heartbeat_exchange = g_strdup(item->value);
+	}
+	item = janus_config_get(config, config_general, janus_config_type_item, "heartbeat_queue");
+	if(!item || !item->value) {
+		JANUS_LOG(LOG_FATAL, "RabbitMQEventHandler: Missing name of outgoing heartbeat_queue for RabbitMQ...\n");
+		goto error;
+	}
+	heartbeat_queue = g_strdup(item->value);
+
+	JANUS_LOG(LOG_INFO, "RabbitMQ event handler enabled");
+
 
 	/* Connect */
 	int result = janus_rabbitmqevh_connect();
@@ -397,25 +432,69 @@ int janus_rabbitmqevh_connect(void) {
 		JANUS_LOG(LOG_FATAL, "RabbitMQEventHandler: Can't connect to RabbitMQ server: error opening channel... %s, %s\n", amqp_error_string2(result.library_error), amqp_method_name(result.reply.id));
 		return -1;
 	}
-	rmq_exchange = amqp_empty_bytes;
-	if(exchange != NULL) {
-		JANUS_LOG(LOG_VERB, "RabbitMQEventHandler: Declaring exchange...\n");
-		rmq_exchange = amqp_cstring_bytes(exchange);
-		amqp_exchange_declare(rmq_conn, rmq_channel, rmq_exchange, amqp_cstring_bytes(exchange_type), 0, 0, 0, 0, amqp_empty_table);
-		result = amqp_get_rpc_reply(rmq_conn);
-		if(result.reply_type != AMQP_RESPONSE_NORMAL) {
-			JANUS_LOG(LOG_FATAL, "RabbitMQEventHandler: Can't connect to RabbitMQ server: error diclaring exchange... %s, %s\n", amqp_error_string2(result.library_error), amqp_method_name(result.reply.id));
-			return -1;
-		}
-	}
-	JANUS_LOG(LOG_VERB, "Declaring outgoing queue... (%s)\n", route_key);
-	rmq_route_key = amqp_cstring_bytes(route_key);
-	amqp_queue_declare(rmq_conn, rmq_channel, rmq_route_key, 0, 0, 0, 0, amqp_empty_table);
+	JANUS_LOG(LOG_VERB, "RabbitMQEventHandler: Declaring exchange...\n");
+	rmq_event_exchange = amqp_cstring_bytes(event_exchange);
+	rmq_connect_exchange = amqp_cstring_bytes(connect_exchange);
+	rmq_heartbeat_exchange = amqp_cstring_bytes(heartbeat_exchange);
+	amqp_exchange_declare(rmq_conn, rmq_channel, rmq_event_exchange, amqp_cstring_bytes(exchange_type), 0, 0, 0, 0, amqp_empty_table);
 	result = amqp_get_rpc_reply(rmq_conn);
 	if(result.reply_type != AMQP_RESPONSE_NORMAL) {
-		JANUS_LOG(LOG_FATAL, "RabbitMQEventHandler: Can't connect to RabbitMQ server: error declaring queue... %s, %s\n", amqp_error_string2(result.library_error), amqp_method_name(result.reply.id));
+		JANUS_LOG(LOG_FATAL, "RabbitMQEventHandler: Can't connect to RabbitMQ server: error diclaring exchange... %s, %s\n", amqp_error_string2(result.library_error), amqp_method_name(result.reply.id));
 		return -1;
 	}
+	amqp_exchange_declare(rmq_conn, rmq_channel, rmq_connect_exchange, amqp_cstring_bytes(exchange_type), 0, 0, 0, 0, amqp_empty_table);
+	result = amqp_get_rpc_reply(rmq_conn);
+	if(result.reply_type != AMQP_RESPONSE_NORMAL) {
+		JANUS_LOG(LOG_FATAL, "RabbitMQEventHandler: Can't connect to RabbitMQ server: error diclaring exchange... %s, %s\n", amqp_error_string2(result.library_error), amqp_method_name(result.reply.id));
+		return -1;
+	}
+	amqp_exchange_declare(rmq_conn, rmq_channel, rmq_heartbeat_exchange, amqp_cstring_bytes(exchange_type), 0, 0, 0, 0, amqp_empty_table);
+	result = amqp_get_rpc_reply(rmq_conn);
+	if(result.reply_type != AMQP_RESPONSE_NORMAL) {
+		JANUS_LOG(LOG_FATAL, "RabbitMQEventHandler: Can't connect to RabbitMQ server: error diclaring exchange... %s, %s\n", amqp_error_string2(result.library_error), amqp_method_name(result.reply.id));
+		return -1;
+	}
+	JANUS_LOG(LOG_VERB, "Declaring queue... \n");
+	rmq_event_queue = amqp_cstring_bytes(event_queue);
+	rmq_connect_queue = amqp_cstring_bytes(connect_queue);
+	rmq_heartbeat_queue = amqp_cstring_bytes(heartbeat_queue);
+	amqp_queue_declare(rmq_conn, rmq_channel, rmq_event_queue, 0, 0, 0, 0, amqp_empty_table);
+	result = amqp_get_rpc_reply(rmq_conn);
+	if(result.reply_type != AMQP_RESPONSE_NORMAL) {
+		JANUS_LOG(LOG_FATAL, "RabbitMQEventHandler: Can't connect to RabbitMQ server: error declaring rmq_event_queue... %s, %s\n", amqp_error_string2(result.library_error), amqp_method_name(result.reply.id));
+		return -1;
+	}
+    amqp_queue_bind(rmq_conn, 1, rmq_event_queue, rmq_event_exchange, amqp_cstring_bytes(""), amqp_empty_table);
+	result = amqp_get_rpc_reply(rmq_conn);
+	if(result.reply_type != AMQP_RESPONSE_NORMAL) {
+		JANUS_LOG(LOG_FATAL, "RabbitMQEventHandler: Can't connect to RabbitMQ server: error bind rmq_event_queue... %s, %s\n", amqp_error_string2(result.library_error), amqp_method_name(result.reply.id));
+		return -1;
+	}
+	amqp_queue_declare(rmq_conn, rmq_channel, rmq_connect_queue, 0, 0, 0, 0, amqp_empty_table);
+	result = amqp_get_rpc_reply(rmq_conn);
+	if(result.reply_type != AMQP_RESPONSE_NORMAL) {
+		JANUS_LOG(LOG_FATAL, "RabbitMQEventHandler: Can't connect to RabbitMQ server: error declaring rmq_connect_queue... %s, %s\n", amqp_error_string2(result.library_error), amqp_method_name(result.reply.id));
+		return -1;
+	}
+	amqp_queue_bind(rmq_conn, 1, rmq_connect_queue, rmq_connect_exchange, amqp_cstring_bytes(""), amqp_empty_table);
+	result = amqp_get_rpc_reply(rmq_conn);
+	if(result.reply_type != AMQP_RESPONSE_NORMAL) {
+		JANUS_LOG(LOG_FATAL, "RabbitMQEventHandler: Can't connect to RabbitMQ server: error bind rmq_connect_queue... %s, %s\n", amqp_error_string2(result.library_error), amqp_method_name(result.reply.id));
+		return -1;
+	}
+	amqp_queue_declare(rmq_conn, rmq_channel, rmq_heartbeat_queue, 0, 0, 0, 0, amqp_empty_table);
+	result = amqp_get_rpc_reply(rmq_conn);
+	if(result.reply_type != AMQP_RESPONSE_NORMAL) {
+		JANUS_LOG(LOG_FATAL, "RabbitMQEventHandler: Can't connect to RabbitMQ server: error declaring rmq_heartbeat_queue... %s, %s\n", amqp_error_string2(result.library_error), amqp_method_name(result.reply.id));
+		return -1;
+	}
+	mqp_queue_bind(rmq_conn, 1, rmq_heartbeat_queue, rmq_heartbeat_exchange, amqp_cstring_bytes(""), amqp_empty_table);
+	result = amqp_get_rpc_reply(rmq_conn);
+	if(result.reply_type != AMQP_RESPONSE_NORMAL) {
+		JANUS_LOG(LOG_FATAL, "RabbitMQEventHandler: Can't connect to RabbitMQ server: error bind rmq_heartbeat_queue... %s, %s\n", amqp_error_string2(result.library_error), amqp_method_name(result.reply.id));
+		return -1;
+	}
+
 	return 0;
 }
 

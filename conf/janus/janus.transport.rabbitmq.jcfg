@@ -36,6 +36,11 @@ general: {
 	#ssl_cacert = "/path/to/cacert.pem"
 	#ssl_cert = "/path/to/cert.pem"
 	#ssl_key = "/path/to/key.pem"
+	node_id = "media"
+	request_queue = "COM.REQ.media"
+	responses_queue = "COM.RES.gateway"
+	event_exchange = "COM.EVENT"
+	event_queue = "COM.EVENT.media"
 }
 
 # If you want to expose the Admin API via RabbitMQ as well, you need to

@@ -33,7 +33,7 @@ general: {
 	event_exchange = "COM.event"
 	event_queue = "COM.event.media"
 	connect_exchange = "COM.connect"
-	heartbeat_exchange = "COM.heartbeat"
 	connect_queue = "COM.connect.media"
-	heartbeat_exchange = "COM.heartbeat.media"
+	heartbeat_exchange = "COM.heartbeat"
+	heartbeat_queue = "COM.heartbeat.media"
 }

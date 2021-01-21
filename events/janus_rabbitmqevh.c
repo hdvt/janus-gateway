@@ -458,7 +458,7 @@ int janus_rabbitmqevh_connect(void) {
 	rmq_event_queue = amqp_cstring_bytes(event_queue);
 	rmq_connect_queue = amqp_cstring_bytes(connect_queue);
 	rmq_heartbeat_queue = amqp_cstring_bytes(heartbeat_queue);
-	amqp_queue_declare(rmq_conn, rmq_channel, rmq_event_queue, 0, 0, 0, 0, amqp_empty_table);
+	amqp_queue_declare(rmq_conn, rmq_channel, rmq_event_queue, 0, 0, 0, 1, amqp_empty_table);
 	result = amqp_get_rpc_reply(rmq_conn);
 	if(result.reply_type != AMQP_RESPONSE_NORMAL) {
 		JANUS_LOG(LOG_FATAL, "RabbitMQEventHandler: Can't connect to RabbitMQ server: error declaring rmq_event_queue... %s, %s\n", amqp_error_string2(result.library_error), amqp_method_name(result.reply.id));
@@ -470,7 +470,7 @@ int janus_rabbitmqevh_connect(void) {
 		JANUS_LOG(LOG_FATAL, "RabbitMQEventHandler: Can't connect to RabbitMQ server: error bind rmq_event_queue... %s, %s\n", amqp_error_string2(result.library_error), amqp_method_name(result.reply.id));
 		return -1;
 	}
-	amqp_queue_declare(rmq_conn, rmq_channel, rmq_connect_queue, 0, 0, 0, 0, amqp_empty_table);
+	amqp_queue_declare(rmq_conn, rmq_channel, rmq_connect_queue, 0, 0, 0, 1, amqp_empty_table);
 	result = amqp_get_rpc_reply(rmq_conn);
 	if(result.reply_type != AMQP_RESPONSE_NORMAL) {
 		JANUS_LOG(LOG_FATAL, "RabbitMQEventHandler: Can't connect to RabbitMQ server: error declaring rmq_connect_queue... %s, %s\n", amqp_error_string2(result.library_error), amqp_method_name(result.reply.id));
@@ -482,13 +482,13 @@ int janus_rabbitmqevh_connect(void) {
 		JANUS_LOG(LOG_FATAL, "RabbitMQEventHandler: Can't connect to RabbitMQ server: error bind rmq_connect_queue... %s, %s\n", amqp_error_string2(result.library_error), amqp_method_name(result.reply.id));
 		return -1;
 	}
-	amqp_queue_declare(rmq_conn, rmq_channel, rmq_heartbeat_queue, 0, 0, 0, 0, amqp_empty_table);
+	amqp_queue_declare(rmq_conn, rmq_channel, rmq_heartbeat_queue, 0, 0, 0, 1, amqp_empty_table);
 	result = amqp_get_rpc_reply(rmq_conn);
 	if(result.reply_type != AMQP_RESPONSE_NORMAL) {
 		JANUS_LOG(LOG_FATAL, "RabbitMQEventHandler: Can't connect to RabbitMQ server: error declaring rmq_heartbeat_queue... %s, %s\n", amqp_error_string2(result.library_error), amqp_method_name(result.reply.id));
 		return -1;
 	}
-	mqp_queue_bind(rmq_conn, 1, rmq_heartbeat_queue, rmq_heartbeat_exchange, amqp_cstring_bytes(""), amqp_empty_table);
+	amqp_queue_bind(rmq_conn, 1, rmq_heartbeat_queue, rmq_heartbeat_exchange, amqp_cstring_bytes(""), amqp_empty_table);
 	result = amqp_get_rpc_reply(rmq_conn);
 	if(result.reply_type != AMQP_RESPONSE_NORMAL) {
 		JANUS_LOG(LOG_FATAL, "RabbitMQEventHandler: Can't connect to RabbitMQ server: error bind rmq_heartbeat_queue... %s, %s\n", amqp_error_string2(result.library_error), amqp_method_name(result.reply.id));

@@ -462,7 +462,7 @@ PKG_CHECK_MODULES([LIBCURL],
                           [AC_MSG_ERROR([libcurl not found. See README.md for installation instructions or use --disable-sample-event-handler])])
                   ])
 AM_CONDITIONAL([ENABLE_TURN_REST_API], [test "x$enable_turn_rest_api" = "xno"])
-AM_CONDITIONAL([ENABLE_SAMPLEEVH], [test "x$enable_sample_event_handler" = "xyes"])
+AM_CONDITIONAL([ENABLE_SAMPLEEVH], [test "x$enable_sample_event_handler" = "xno"])
 
 AC_CHECK_PROG([DOXYGEN],
               [doxygen],

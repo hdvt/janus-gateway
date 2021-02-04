@@ -1142,7 +1142,6 @@ int janus_process_incoming_request(janus_request* request) {
 	/* What is this? */
 	if (!strcasecmp(message_text, "call")) {
 		guint64 call_id = json_integer_value(json_object_get(root, "call_id"));
-
 		if (handle == NULL) {
 			const gchar* plugin_text = "janus.plugin.videocall";
 			janus_plugin* plugin_t = janus_plugin_find(plugin_text);
@@ -1303,6 +1302,7 @@ int janus_process_incoming_request(janus_request* request) {
 				JANUS_LOG(LOG_WARN, "[%"SCNu64"]   -- DataChannels have been negotiated, but support for them has not been compiled...\n", handle->handle_id);
 			}
 #endif
+
 			/* We behave differently if it's a new session or an update... */
 			if (!renegotiation) {
 				/* New session */
@@ -1526,24 +1526,24 @@ int janus_process_incoming_request(janus_request* request) {
 			/* Reference the content, as destroying the result instance will decref it */
 			json_incref(result->content);
 			/* Prepare JSON response */
-			json_t* reply = janus_create_message("success", session->session_id, transaction_text);
-			json_object_set_new(reply, "sender", json_integer(handle->handle_id));
-			if (janus_is_opaqueid_in_api_enabled() && handle->opaque_id != NULL)
-				json_object_set_new(reply, "opaque_id", json_string(handle->opaque_id));
-			json_t* plugin_data = json_object();
-			json_object_set_new(plugin_data, "plugin", json_string(plugin_t->get_package()));
-			json_object_set_new(plugin_data, "data", result->content);
-			json_object_set_new(reply, "plugindata", plugin_data);
-			/* Send the success reply */
-			ret = janus_process_success(request, reply);
+			// json_t* reply = janus_create_message("success", session->session_id, transaction_text);
+			// json_object_set_new(reply, "sender", json_integer(handle->handle_id));
+			// if (janus_is_opaqueid_in_api_enabled() && handle->opaque_id != NULL)
+			// 	json_object_set_new(reply, "opaque_id", json_string(handle->opaque_id));
+			// json_t* plugin_data = json_object();
+			// json_object_set_new(plugin_data, "plugin", json_string(plugin_t->get_package()));
+			// json_object_set_new(plugin_data, "data", result->content);
+			// json_object_set_new(reply, "plugindata", plugin_data);
+			// /* Send the success reply */
+			// ret = janus_process_success(request, reply);
 		}
 		else if (result->type == JANUS_PLUGIN_OK_WAIT) {
 			/* The plugin received the request but didn't process it yet, send an ack (asynchronous notifications may follow) */
-			json_t* reply = janus_create_message("ack", session_id, transaction_text);
-			if (result->text)
-				json_object_set_new(reply, "hint", json_string(result->text));
-			/* Send the success reply */
-			ret = janus_process_success(request, reply);
+			// json_t* reply = janus_create_message("ack", session_id, transaction_text);
+			// if (result->text)
+			// 	json_object_set_new(reply, "hint", json_string(result->text));
+			// /* Send the success reply */
+			// ret = janus_process_success(request, reply);
 		}
 		else {
 			/* Something went horribly wrong! */

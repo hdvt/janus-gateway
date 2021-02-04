@@ -1120,6 +1120,7 @@ static void* janus_videocall_handler(void* data) {
 		gboolean sdp_update = FALSE;
 		if (json_object_get(msg->jsep, "update") != NULL)
 			sdp_update = json_is_true(json_object_get(msg->jsep, "update"));
+
 		if (!strcasecmp(request_text, "list")) {
 			result = json_object();
 			json_t* list = json_array();
@@ -1220,7 +1221,7 @@ static void* janus_videocall_handler(void* data) {
 			session->has_audio = (strstr(msg_sdp, "m=audio") != NULL);
 			session->has_video = (strstr(msg_sdp, "m=video") != NULL);
 			session->has_data = (strstr(msg_sdp, "DTLS/SCTP") != NULL);
-			JANUS_LOG(LOG_VERB, "%s is calling %s\n", session->handle_id);
+			JANUS_LOG(LOG_VERB, "%lu is calling \n", session->handle_id);
 			JANUS_LOG(LOG_VERB, "This is involving a negotiation (%s) as well:\n%s\n", msg_sdp_type, msg_sdp);
 			/* Send an ack back */
 			json_t* jsep = json_pack("{ssss}", "type", "answer", "sdp", msg_sdp);
@@ -1233,9 +1234,9 @@ static void* janus_videocall_handler(void* data) {
 			/* Also notify event handlers */
 			if (notify_events && gateway->events_is_enabled())
 			{
-				json_t* info = json_object();
-				json_object_set_new(info, "event", json_string("calling"));
-				gateway->notify_event(&janus_videocall_plugin, session->handle, info);
+				// json_t* info = json_object();
+				// json_object_set_new(info, "event", json_string("calling"));
+				// gateway->notify_event(&janus_videocall_plugin, session->handle, info);
 			}
 		}
 		else if (!strcasecmp(request_text, "answer")) {
@@ -1261,7 +1262,7 @@ static void* janus_videocall_handler(void* data) {
 			}
 			janus_ice_handle* caller_ice_handle = (janus_ice_handle*)peer->handle->gateway_handle;
 			janus_ice_handle* callee_ice_handle = (janus_ice_handle*)session->handle->gateway_handle;
-			if (caller_ice_handle->call_id != callee_ice_handle) // || !g_atomic_int_get(&session->incall) || !g_atomic_int_get(&peer->incall
+			if (caller_ice_handle->call_id != callee_ice_handle->call_id) // || !g_atomic_int_get(&session->incall) || !g_atomic_int_get(&peer->incall
 			{
 				JANUS_LOG(LOG_ERR, "Invalid incoming call\n");
 				error_code = JANUS_VIDEOCALL_ERROR_NO_CALL;
@@ -1300,7 +1301,7 @@ static void* janus_videocall_handler(void* data) {
 			janus_mutex_lock(&peer->mutex);
 			peer->peer = session;
 			janus_mutex_unlock(&peer->mutex);
-			JANUS_LOG(LOG_VERB, "%s is accepting a call from %s\n", session->username, peer->username);
+			JANUS_LOG(LOG_VERB, "%lu is accepting a call from %lu\n", session->handle_id, peer->handle_id);
 			JANUS_LOG(LOG_VERB, "This is involving a negotiation (%s) as well:\n%s\n", msg_sdp_type, msg_sdp);
 			session->has_audio = (strstr(msg_sdp, "m=audio") != NULL);
 			session->has_video = (strstr(msg_sdp, "m=video") != NULL);

@@ -38,7 +38,7 @@ general: {
 	#ssl_key = "/path/to/key.pem"
 	node_id = "media"
 	request_queue = "COM.REQ.media"
-	responses_queue = "COM.RES.gateway"
+	response_queue = "COM.RES.gateway"
 	event_exchange = "COM.EVENT"
 	event_queue = "COM.EVENT.media"
 }

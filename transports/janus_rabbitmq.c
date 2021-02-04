@@ -692,7 +692,7 @@ int janus_rabbitmq_send_message(janus_transport_session *transport, void *reques
 	/* FIXME Add to the queue of outgoing messages */
 	janus_rabbitmq_response *response = g_malloc(sizeof(janus_rabbitmq_response));
 	response->admin = admin;
-	json_object_set_new(message, "sender", json_string(node_id));
+	//json_object_set_new(message, "sender", json_string("janus"));
 	json_t *transaction = json_object_get(message, "transaction");
 	json_t *packet = json_object();
 	if (transaction && json_is_string(transaction))
@@ -882,10 +882,18 @@ void *janus_rmq_in_thread(void *data) {
 		/* Parse the JSON payload */
 		json_error_t error;
 		json_t *root = json_loadb(payload, frame.payload.body_fragment.len, 0, &error);
+		json_t *params = json_object_get(root, "params");
+		json_t *request_id = json_object_get(root, "request_id");
+		if (params && json_is_object(params) && request_id && json_is_string(request_id))
+		{
+			json_object_set_new(params, "transaction", request_id);
+			gateway->incoming_request(&janus_rabbitmq_transport, rmq_session, correlation, admin, params, &error);
+		}
+
 		g_free(payload);
 		/* Notify the core, passing both the object and, since it may be needed, the error
 		 * We also specify the correlation ID as an opaque request identifier: we'll need it later */
-		gateway->incoming_request(&janus_rabbitmq_transport, rmq_session, correlation, admin, root, &error);
+		//gateway->incoming_request(&janus_rabbitmq_transport, rmq_session, correlation, admin, root, &error);
 	}
 	JANUS_LOG(LOG_INFO, "Leaving RabbitMQ in thread\n");
 	return NULL;
@@ -912,10 +920,10 @@ void *janus_rmq_out_thread(void *data) {
 			props._flags = 0;
 			props._flags |= AMQP_BASIC_REPLY_TO_FLAG;
 			props.reply_to = amqp_cstring_bytes("Janus");
-			if(response->correlation_id) {
-				props._flags |= AMQP_BASIC_CORRELATION_ID_FLAG;
-				props.correlation_id = amqp_cstring_bytes(response->correlation_id);
-			}
+			// if(response->correlation_id) {
+			// 	props._flags |= AMQP_BASIC_CORRELATION_ID_FLAG;
+			// 	props.correlation_id = amqp_cstring_bytes(response->correlation_id);
+			// }
 			props._flags |= AMQP_BASIC_CONTENT_TYPE_FLAG;
 			props.content_type = amqp_cstring_bytes("application/json");
 			amqp_bytes_t message = amqp_cstring_bytes(payload_text);
@@ -928,8 +936,8 @@ void *janus_rmq_out_thread(void *data) {
 			janus_mutex_unlock(&rmq_client->mutex);
 		}
 		/* Free the message */
-		g_free(response->correlation_id);
-		response->correlation_id = NULL;
+		// g_free(response->correlation_id);
+		// response->correlation_id = NULL;
 		if(response->payload != NULL)
 			free(response->payload);
 		response->payload = NULL;

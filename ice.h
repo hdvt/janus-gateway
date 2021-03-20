@@ -290,7 +290,8 @@ enum {
 
 /*! \brief Janus ICE handle */
 struct janus_ice_handle {
-	guint64 call_id;
+	/*! \brief call id */
+	char *call_id;
 	/*! \brief Opaque pointer to the core/peer session */
 	void *session;
 	/*! \brief Handle identifier, guaranteed to be non-zero */

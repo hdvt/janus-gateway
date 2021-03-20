@@ -857,8 +857,14 @@ int janus_mqtt_send_message(janus_transport_session *transport, void *request_id
 		json_decref(message);
 		return -1;
 	}
-
-	char *payload = json_dumps(message, json_format);
+	json_t *transaction = json_object_get(message, "transaction");
+	json_t *packet = json_object();
+	if (transaction && json_is_string(transaction))
+		json_object_set_new(packet, "request_id", transaction);
+	json_object_set_new(packet, "data", message);
+	// response->payload = json_dumps(packet, json_format);
+	char *payload = json_dumps(packet, json_format);
+	
 	JANUS_LOG(LOG_HUGE, "Sending %s API message via MQTT: %s\n", admin ? "admin" : "Janus", payload);
 
 	int rc;
@@ -1135,7 +1141,8 @@ int janus_mqtt_client_message_arrived(void *context, char *topicName, int topicL
 
 		json_error_t error;
 		json_t *root = json_loadb(message->payload, message->payloadlen, 0, &error);
-
+		json_t *params = json_object_get(root, "params");
+		json_t *request_id = json_object_get(root, "request_id");
 #ifdef MQTTVERSION_5
 		if(ctx->connect.mqtt_version == MQTTVERSION_5 && !admin) {
 			/* Save MQTT 5 properties copy to the state */
@@ -1157,8 +1164,10 @@ int janus_mqtt_client_message_arrived(void *context, char *topicName, int topicL
 			g_rw_lock_writer_unlock(&janus_mqtt_transaction_states_lock);
 		}
 #endif
-
-		ctx->gateway->incoming_request(&janus_mqtt_transport_, mqtt_session, NULL, admin, root, &error);
+		if (params && json_is_object(params) && request_id && json_is_string(request_id)){
+			json_object_set_new(params, "transaction", request_id);
+			ctx->gateway->incoming_request(&janus_mqtt_transport_, mqtt_session, NULL, admin, params, &error);
+		}
 	}
 
 	ret = TRUE;

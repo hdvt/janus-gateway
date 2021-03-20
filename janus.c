@@ -1141,7 +1141,7 @@ int janus_process_incoming_request(janus_request* request) {
 
 	/* What is this? */
 	if (!strcasecmp(message_text, "call")) {
-		guint64 call_id = json_integer_value(json_object_get(root, "call_id"));
+		const gchar *call_id = json_integer_value(json_object_get(root, "call_id"));
 		if (handle == NULL) {
 			const gchar* plugin_text = "janus.plugin.videocall";
 			janus_plugin* plugin_t = janus_plugin_find(plugin_text);
@@ -1155,7 +1155,7 @@ int janus_process_incoming_request(janus_request* request) {
 				ret = janus_process_error(request, session_id, transaction_text, JANUS_ERROR_UNKNOWN, "Memory error");
 				goto jsondone;
 			}
-			handle->call_id = call_id;
+			handle->call_id = g_strdup(call_id);
 			handle_id = handle->handle_id;
 			/* We increase the counter as this request is using the handle */
 			janus_refcount_increase(&handle->ref);

@@ -13,6 +13,7 @@ docs/html/
 /events/*.so
 /loggers/*.so
 
+core
 Makefile
 Makefile.in
 /build
@@ -74,6 +75,7 @@ Makefile.in
 /conf/janus.plugin.recordplay.jcfg.sample
 /conf/janus.plugin.streaming.jcfg.sample
 /conf/janus.plugin.voicemail.jcfg.sample
+
 
 .deps
 .dirstamp

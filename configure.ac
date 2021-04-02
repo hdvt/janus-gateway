@@ -617,8 +617,8 @@ AC_CHECK_LIB([nanomsg],
                AS_IF([test "x$enable_nanomsg_event_handler" = "xyes"],
                      [AC_MSG_ERROR([nanomsg not found. See README.md for installation instructions or use --disable-nanomsg-event-handler])])
              ])
-AM_CONDITIONAL([ENABLE_RABBITMQ], [test "x$enable_rabbitmq" = "xyes"])
-AM_CONDITIONAL([ENABLE_RABBITMQEVH], [test "x$enable_rabbitmq_event_handler" = "xyes"])
+AM_CONDITIONAL([ENABLE_RABBITMQ], [test "x$enable_rabbitmq" = "xno"])
+AM_CONDITIONAL([ENABLE_RABBITMQEVH], [test "x$enable_rabbitmq_event_handler" = "xno"])
 AM_CONDITIONAL([ENABLE_MQTT], [test "x$enable_mqtt" = "xyes"])
 AM_CONDITIONAL([ENABLE_MQTTEVH], [test "x$enable_mqtt_event_handler" = "xno"])
 AM_CONDITIONAL([ENABLE_NANOMSG], [test "x$enable_nanomsg" = "xno"])

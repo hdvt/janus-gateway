@@ -831,6 +831,7 @@ void janus_videocall_incoming_rtp(janus_plugin_session* handle, janus_plugin_rtp
 		else {
 			if ((!video && session->audio_active) || (video && session->video_active)) {
 				/* Save the frame if we're recording */
+				// JANUS_LOG(LOG_ERR, "incoming rtp %s from %lu\n", video ? "video" : "audio", session->handle_id);
 				janus_recorder_save_frame(video ? session->vrc : session->arc, buf, len);
 				/* Forward the packet to the peer */
 				gateway->relay_rtp(peer->handle, packet);

@@ -423,6 +423,11 @@ struct janus_callbacks {
 	 * @param[in] desc The descriptor to search for
 	 * @returns TRUE if the token is valid, not expired and contains the descriptor, FALSE otherwise */
 	gboolean (* const auth_signature_contains)(janus_plugin *plugin, const char *token, const char *descriptor);
+	/*! \brief Method to handle remote sdp */
+	json_t *(* const handle_sdp)(janus_plugin_session  *plugin_session, janus_plugin *plugin, const char *sdp_type, const char *sdp, gboolean restart);
+	/*! \brief Method to send response*/
+	int (* const send_response)(janus_plugin_session* plugin_session, janus_plugin* plugin, const char* transaction, gboolean success, json_t* data);
+
 };
 
 /*! \brief The hook that plugins need to implement to be created from the Janus core */

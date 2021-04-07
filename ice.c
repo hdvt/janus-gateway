@@ -692,29 +692,22 @@ static void janus_ice_notify_media(janus_ice_handle *handle, gboolean video, gbo
 	janus_session *session = (janus_session *)handle->session;
 	if(session == NULL)
 		return;
+	json_t *packet = json_object();
+	json_object_set_new(packet, "janus", json_string("event"));
+	json_object_set_new(packet, "session_id", json_integer(session->session_id));
 	json_t *event = json_object();
-	json_object_set_new(event, "janus", json_string("media"));
-	json_object_set_new(event, "session_id", json_integer(session->session_id));
-	json_object_set_new(event, "sender", json_integer(handle->handle_id));
-	if(opaqueid_in_api && handle->opaque_id != NULL)
-		json_object_set_new(event, "opaque_id", json_string(handle->opaque_id));
+	json_object_set_new(event, "name", json_string("media"));
+	json_object_set_new(event, "handle_id", json_integer(handle->handle_id));
 	json_object_set_new(event, "type", json_string(video ? "video" : "audio"));
 	json_object_set_new(event, "receiving", up ? json_true() : json_false());
 	if(!up && no_media_timer > 1)
 		json_object_set_new(event, "seconds", json_integer(no_media_timer));
+	json_object_set_new(packet, "event", event);
 	/* Send the event */
 	JANUS_LOG(LOG_VERB, "[%"SCNu64"] Sending event to transport...\n", handle->handle_id);
-	janus_session_notify_event(session, event);
+	janus_session_notify_event(session, packet);
 	/* Notify event handlers as well */
-	if(janus_events_is_enabled()) {
-		json_t *info = json_object();
-		json_object_set_new(info, "media", json_string(video ? "video" : "audio"));
-		json_object_set_new(info, "receiving", up ? json_true() : json_false());
-		if(!up && no_media_timer > 1)
-			json_object_set_new(info, "seconds", json_integer(no_media_timer));
-		janus_events_notify_handlers(JANUS_EVENT_TYPE_MEDIA, JANUS_EVENT_SUBTYPE_MEDIA_STATE,
-			session->session_id, handle->handle_id, handle->opaque_id, info);
-	}
+	
 }
 
 void janus_ice_notify_hangup(janus_ice_handle *handle, const char *reason) {

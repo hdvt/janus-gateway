@@ -589,6 +589,7 @@ void janus_plugin_end_session(janus_plugin_session* plugin_session);
 void janus_plugin_notify_event(janus_plugin* plugin, janus_plugin_session* plugin_session, json_t* event);
 gboolean janus_plugin_auth_is_signature_valid(janus_plugin* plugin, const char* token);
 gboolean janus_plugin_auth_signature_contains(janus_plugin* plugin, const char* token, const char* desc);
+int janus_plugin_send_response(janus_plugin_session* plugin_session, janus_plugin* plugin, const char* transaction, gboolean success, json_t* data);
 static janus_callbacks janus_handler_plugin =
 {
 	.push_event = janus_plugin_push_event,
@@ -603,6 +604,8 @@ static janus_callbacks janus_handler_plugin =
 	.notify_event = janus_plugin_notify_event,
 	.auth_is_signature_valid = janus_plugin_auth_is_signature_valid,
 	.auth_signature_contains = janus_plugin_auth_signature_contains,
+	.handle_sdp	= janus_plugin_handle_sdp,
+	.send_response = janus_plugin_send_response
 };
 ///@}
 
@@ -1169,7 +1172,6 @@ int janus_process_incoming_request(janus_request* request) {
 				goto jsondone;
 			}
 		}		/* Make sure the app handle is still valid */
-
 		janus_plugin* plugin_t = (janus_plugin*)handle->app;
 		JANUS_LOG(LOG_VERB, "[%"SCNu64"] There's a message for %s\n", handle->handle_id, plugin_t->get_name());
 		JANUS_VALIDATE_JSON_OBJECT(root, body_parameters,
@@ -1557,7 +1559,7 @@ int janus_process_incoming_request(janus_request* request) {
 	else if (!strcasecmp(message_text, "keepalive")) {
 		/* Just a keep-alive message, reply with an ack */
 		JANUS_LOG(LOG_VERB, "Got a keep-alive on session %"SCNu64"\n", session_id);
-		json_t* reply = janus_create_message("ack", session_id, transaction_text);
+		json_t* reply = janus_create_message("success", session_id, transaction_text);
 		/* Send the success reply */
 		ret = janus_process_success(request, reply);
 	}
@@ -2205,7 +2207,7 @@ int janus_process_incoming_request(janus_request* request) {
 	trickledone:
 		janus_mutex_unlock(&handle->mutex);
 		/* We reply right away, not to block the web server... */
-		json_t* reply = janus_create_message("ack", session_id, transaction_text);
+		json_t* reply = janus_create_message("success", session_id, transaction_text);
 		/* Send the success reply */
 		ret = janus_process_success(request, reply);
 	}
@@ -3226,7 +3228,7 @@ int janus_process_incoming_admin_request(janus_request* request) {
 				goto jsondone;
 			}
 			if (g_atomic_int_compare_and_exchange(&handle->dump_packets, 1, 0)) {
-				janus_text2pcap_close(handle->text2pcap);
+				janus_text2pcap_close(handle->text2pcap);  
 				g_clear_pointer(&handle->text2pcap, janus_text2pcap_free);
 			}
 			/* Prepare JSON reply */
@@ -4298,6 +4300,47 @@ json_t * janus_plugin_handle_sdp(janus_plugin_session * plugin_session, janus_pl
 	janus_mutex_unlock(&ice_handle->mutex);
 	g_free(tmp);
 	return jsep;
+}
+
+int janus_plugin_send_response(janus_plugin_session* plugin_session, janus_plugin* plugin, const char* transaction, gboolean success, json_t* data) {
+	if (!plugin || !data)
+		return -1;
+	if (!janus_plugin_session_is_alive(plugin_session))
+		return -2;
+	janus_refcount_increase(&plugin_session->ref);
+	janus_ice_handle* ice_handle = (janus_ice_handle*)plugin_session->gateway_handle;
+	if (!ice_handle || janus_flags_is_set(&ice_handle->webrtc_flags, JANUS_ICE_HANDLE_WEBRTC_STOP)) {
+		janus_refcount_decrease(&plugin_session->ref);
+		return JANUS_ERROR_SESSION_NOT_FOUND;
+	}
+	janus_refcount_increase(&ice_handle->ref);
+	janus_session* session = ice_handle->session;
+	if (!session || g_atomic_int_get(&session->destroyed)) {
+		janus_refcount_decrease(&plugin_session->ref);
+		janus_refcount_decrease(&ice_handle->ref);
+		return JANUS_ERROR_SESSION_NOT_FOUND;
+	}
+	/* Make sure this is a JSON object */
+	if (!json_is_object(data)) {
+		JANUS_LOG(LOG_ERR, "[%"SCNu64"] Cannot push event (JSON error: not an object)\n", ice_handle->handle_id);
+		janus_refcount_decrease(&plugin_session->ref);
+		janus_refcount_decrease(&ice_handle->ref);
+		return JANUS_ERROR_INVALID_JSON_OBJECT;
+	}
+
+	/* Reference the payload, as the plugin may still need it and will do a decref itself */
+	json_incref(data);
+	/* Prepare JSON event */
+	json_t* event = janus_create_message(success ? "success" : "error", session->session_id, transaction);
+	json_object_set_new(event, success ? "data" : "error", data);
+
+	/* Send the event */
+	JANUS_LOG(LOG_VERB, "[%"SCNu64"] Sending event to transport...\n", ice_handle->handle_id);
+	janus_session_notify_event(session, event);
+
+	janus_refcount_decrease(&plugin_session->ref);
+	janus_refcount_decrease(&ice_handle->ref);
+	return JANUS_OK;
 }
 
 void janus_plugin_relay_rtp(janus_plugin_session* plugin_session, janus_plugin_rtp* packet) {

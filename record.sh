@@ -1,5 +1,4 @@
 #!/bin/bash
-
 print_help()
 {
     echo -e "\033[33mUsage: $1 [-d record_dir] [-t record_type] [-a1 audio1_mjr] [-v1 video1_mjr] [-a2 audio2_mjr] [-v2 video2_mjr] [-o output] [--help]\033[0m"
@@ -106,10 +105,10 @@ if [ "${TYPE}" = "v" ]; then
 	OUTPUT_FILE="${OUTPUT_NAME}.webm"
     
 	# PROCESS
-	janus-pp-rec "${DIR}/${VIDEO_MJR_FILE_1}" "${DIR}/${VIDEO_MEDIA_FILE_1}" -d 0 || exit 1
-	janus-pp-rec "${DIR}/${AUDIO_MJR_FILE_1}" "${DIR}/${AUDIO_MEDIA_FILE_1}" -d 0 || exit 1
-	janus-pp-rec "${DIR}/${VIDEO_MJR_FILE_2}" "${DIR}/${VIDEO_MEDIA_FILE_2}" -d 0 || exit 1
-	janus-pp-rec "${DIR}/${AUDIO_MJR_FILE_2}" "${DIR}/${AUDIO_MEDIA_FILE_2}" -d 0 || exit 1
+	janus-pp-rec "${DIR}/${VIDEO_MJR_FILE_1}" "${DIR}/${VIDEO_MEDIA_FILE_1}" -d 0
+	janus-pp-rec "${DIR}/${AUDIO_MJR_FILE_1}" "${DIR}/${AUDIO_MEDIA_FILE_1}" -d 0 
+	janus-pp-rec "${DIR}/${VIDEO_MJR_FILE_2}" "${DIR}/${VIDEO_MEDIA_FILE_2}" -d 0 
+	janus-pp-rec "${DIR}/${AUDIO_MJR_FILE_2}" "${DIR}/${AUDIO_MEDIA_FILE_2}" -d 0 
 
     if [ ! -f "${DIR}/${AUDIO_MEDIA_FILE_1}" ];
     then
@@ -132,11 +131,11 @@ if [ "${TYPE}" = "v" ]; then
 	ffmpeg -i "${DIR}/${VIDEO_MEDIA_FILE_2}" -i "${DIR}/${AUDIO_MEDIA_FILE_2}" -c copy "${DIR}/${VA_MEDIA_FILE_2}" -y -hide_banner -loglevel panic || exit 1
 	ffmpeg -i "${DIR}/${VA_MEDIA_FILE_1}" -i "${DIR}/${VA_MEDIA_FILE_2}"  -filter_complex "[0]pad=iw+5:color=black[left];[left][1]hstack=inputs=2" "${DIR}/${OUTPUT_FILE}" -y -hide_banner -loglevel panic || exit 1
 	# remove unused files
-	rm "${DIR}/${VIDEO_MJR_FILE_1}" "${DIR}/${AUDIO_MJR_FILE_1}" "${DIR}/${VIDEO_MJR_FILE_2}" "${DIR}/${AUDIO_MJR_FILE_2}" "${DIR}/${VA_MEDIA_FILE_1}" "${DIR}/${VA_MEDIA_FILE_2}" || exit 1   
-    [ "${AUDIO_MEDIA_FILE_1}" != "${SAMPLE_AUDIO_FILE}" ] && rm "${DIR}/${AUDIO_MEDIA_FILE_1}" || exit 1
-    [ "${VIDEO_MEDIA_FILE_1}" != "${SAMPLE_VIDEO_FILE}" ] && rm "${DIR}/${VIDEO_MEDIA_FILE_1}" || exit 1
-    [ "${AUDIO_MEDIA_FILE_2}" != "${SAMPLE_AUDIO_FILE}" ] && rm "${DIR}/${AUDIO_MEDIA_FILE_2}" || exit 1
-    [ "${VIDEO_MEDIA_FILE_2}" != "${SAMPLE_VIDEO_FILE}" ] && rm "${DIR}/${VIDEO_MEDIA_FILE_2}" || exit 1 
+	rm "${DIR}/${VIDEO_MJR_FILE_1}" "${DIR}/${AUDIO_MJR_FILE_1}" "${DIR}/${VIDEO_MJR_FILE_2}" "${DIR}/${AUDIO_MJR_FILE_2}" "${DIR}/${VA_MEDIA_FILE_1}" "${DIR}/${VA_MEDIA_FILE_2}" || exit 1
+    [ "${AUDIO_MEDIA_FILE_1}" != "${SAMPLE_AUDIO_FILE}" ] && (rm "${DIR}/${AUDIO_MEDIA_FILE_1}" || exit 1)
+    [ "${VIDEO_MEDIA_FILE_1}" != "${SAMPLE_VIDEO_FILE}" ] && (rm "${DIR}/${VIDEO_MEDIA_FILE_1}" || exit 1)
+    [ "${AUDIO_MEDIA_FILE_2}" != "${SAMPLE_AUDIO_FILE}" ] && (rm "${DIR}/${AUDIO_MEDIA_FILE_2}" || exit 1)
+    [ "${VIDEO_MEDIA_FILE_2}" != "${SAMPLE_VIDEO_FILE}" ] && (rm "${DIR}/${VIDEO_MEDIA_FILE_2}" || exit 1)
 	# echo -e "\033[Finished... \033[0m"
     exit 0
 fi 

@@ -1144,7 +1144,7 @@ int janus_process_incoming_request(janus_request* request) {
 
 	/* What is this? */
 	if (!strcasecmp(message_text, "call")) {
-		const gchar *call_id = json_integer_value(json_object_get(root, "call_id"));
+		const gchar *call_id = json_string_value(json_object_get(root, "call_id"));
 		if (handle == NULL) {
 			const gchar* plugin_text = "janus.plugin.videocall";
 			janus_plugin* plugin_t = janus_plugin_find(plugin_text);

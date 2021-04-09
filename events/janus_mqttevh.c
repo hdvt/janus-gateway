@@ -92,7 +92,7 @@ static volatile gint initialized = 0, stopping = 0;
 
 /* JSON serialization options */
 #define JANUS_MQTTEVH_DEFAULT_ADDPLUGIN				1
-#define	JANUS_MQTTEVH_DEFAULT_ADDEVENT				1
+#define	JANUS_MQTTEVH_DEFAULT_ADDEVENT				0
 #define	JANUS_MQTTEVH_DEFAULT_KEEPALIVE				30
 #define	JANUS_MQTTEVH_DEFAULT_CLEANSESSION			0	/* Off */
 #define JANUS_MQTTEVH_DEFAULT_MAX_INFLIGHT			10
@@ -1185,19 +1185,21 @@ static void *janus_mqttevh_handler(void *data) {
 		} else {
 			JANUS_LOG(LOG_WARN, "Can't get event label or name\n");
 		}
-
-		if(!g_atomic_int_get(&stopping)) {
-			/* Convert event to string */
-			if(ctx->addevent) {
-				snprintf(topicbuf, sizeof(topicbuf), "%s/%s", ctx->publish.topic, janus_events_type_to_label(type));
-				JANUS_LOG(LOG_DBG, "Debug: MQTT Publish event on %s\n", topicbuf);
-				janus_mqttevh_send_message(ctx, topicbuf, event);
-			} else {
-				janus_mqttevh_send_message(ctx, ctx->publish.topic, event);
-			}
+		switch(type) {
+			case JANUS_EVENT_TYPE_PLUGIN:{
+				if(!g_atomic_int_get(&stopping)) {
+					/* Convert event to string */
+						json_t *packet = json_object();
+						json_t *data = json_object(); 
+						json_object_set(data, "janus", json_string("event"));
+						json_object_set(data, "event", json_object_get(json_object_get(event, "event"), "data"));
+						json_object_set(packet, "data", data);
+						janus_mqttevh_send_message(ctx, ctx->publish.topic, packet);
+					}
+				}
+				break;
 		}
-
-		JANUS_LOG(LOG_VERB, "Debug: Thread done publishing MQTT Publish event on %s\n", topicbuf);
+		JANUS_LOG(LOG_VERB, "Debug: Thread done publishing MQTT Publish event on %s\n", ctx->addevent ? topicbuf : ctx->publish.topic);
 	}
 	JANUS_LOG(LOG_VERB, "Leaving MQTTEventHandler handler thread\n");
 	return NULL;

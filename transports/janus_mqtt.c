@@ -861,6 +861,8 @@ int janus_mqtt_send_message(janus_transport_session *transport, void *request_id
 	json_t *packet = json_object();
 	if (transaction && json_is_string(transaction))
 		json_object_set_new(packet, "request_id", transaction);
+	else
+		return 0; // only send response message
 	json_object_set_new(packet, "data", message);
 	// response->payload = json_dumps(packet, json_format);
 	char *payload = json_dumps(packet, json_format);

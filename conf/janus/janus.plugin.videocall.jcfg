@@ -1,5 +1,6 @@
 # events = true|false, whether events should be sent to event handlers
 
 general: {
-	events = true
+	events = true,
+	recording_dir = "/home/bangtv2/MySpace/Working/Develop/com-server/com-server/public/recording"
 }

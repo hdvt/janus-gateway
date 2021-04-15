@@ -16,7 +16,7 @@ print_help()
 
 #-----------------------Start here------------------------
 #echo "------------------"
-echo -e "\033[1;34mTool     : Convert mjr to media file \033[0m"
+#echo -e "\033[1;34mTool     : Convert mjr to media file \033[0m"
 
 #echo -e "\033[1mParsing... \033[0m"
 for ((i=1; i<=$#; i++));
@@ -84,7 +84,7 @@ SAMPLE_VIDEO_FILE="sample.webm"
 
 #PROCESSING
 if [ "${TYPE}" = "v" ]; then
-    echo -e "\033[1mVideo converting... \033[0m"
+    #echo -e "\033[1mVideo converting... \033[0m"
 	if [ ! -f "${DIR}/${AUDIO_MJR_FILE_1}" ] || [ ! -f "${DIR}/${AUDIO_MJR_FILE_2}" ] || [ ! -f "${DIR}/${VIDEO_MJR_FILE_1}" ] || [ ! -f "${DIR}/${VIDEO_MJR_FILE_2}" ]; 
 	then
 		echo "The MJR files (audio, video) is required"
@@ -105,10 +105,10 @@ if [ "${TYPE}" = "v" ]; then
 	OUTPUT_FILE="${OUTPUT_NAME}.mp4"
     
 	# PROCESS
-	janus-pp-rec "${DIR}/${VIDEO_MJR_FILE_1}" "${DIR}/${VIDEO_MEDIA_FILE_1}" -d 0 || ( echo "\033[1m Convert video mjr 1 failed\033[0m" && exit 1 )
-	janus-pp-rec "${DIR}/${AUDIO_MJR_FILE_1}" "${DIR}/${AUDIO_MEDIA_FILE_1}" -d 0 || ( echo "\033[1m Convert audio mjr 2 failed\033[0m" && exit 1 )
-	janus-pp-rec "${DIR}/${VIDEO_MJR_FILE_2}" "${DIR}/${VIDEO_MEDIA_FILE_2}" -d 0 || ( echo "\033[1m Convert video mjr 2 failed\033[0m" && exit 1 )
-	janus-pp-rec "${DIR}/${AUDIO_MJR_FILE_2}" "${DIR}/${AUDIO_MEDIA_FILE_2}" -d 0 || ( echo "\033[1m Convert audio mjr 2 failed\033[0m" && exit 1 )
+	janus-pp-rec "${DIR}/${VIDEO_MJR_FILE_1}" "${DIR}/${VIDEO_MEDIA_FILE_1}" -d 0 || ( echo -e "\033[1m Convert video mjr 1 failed\033[0m" && exit 1 )
+	janus-pp-rec "${DIR}/${AUDIO_MJR_FILE_1}" "${DIR}/${AUDIO_MEDIA_FILE_1}" -d 0 || ( echo -e "\033[1m Convert audio mjr 2 failed\033[0m" && exit 1 )
+	janus-pp-rec "${DIR}/${VIDEO_MJR_FILE_2}" "${DIR}/${VIDEO_MEDIA_FILE_2}" -d 0 || ( echo -e "\033[1m Convert video mjr 2 failed\033[0m" && exit 1 )
+	janus-pp-rec "${DIR}/${AUDIO_MJR_FILE_2}" "${DIR}/${AUDIO_MEDIA_FILE_2}" -d 0 || ( echo -e "\033[1m Convert audio mjr 2 failed\033[0m" && exit 1 )
 
     if [ ! -f "${DIR}/${AUDIO_MEDIA_FILE_1}" ];
     then
@@ -127,17 +127,17 @@ if [ "${TYPE}" = "v" ]; then
         VIDEO_MEDIA_FILE_2="${SAMPLE_VIDEO_FILE}"
     fi
 
-	ffmpeg -i "${DIR}/${VIDEO_MEDIA_FILE_1}" -i "${DIR}/${AUDIO_MEDIA_FILE_1}" -c copy "${DIR}/${VA_MEDIA_FILE_1}" -y -hide_banner -loglevel panic || ( echo "\033[1m Mux video 1 failed\033[0m" && exit 1 )
-	ffmpeg -i "${DIR}/${VIDEO_MEDIA_FILE_2}" -i "${DIR}/${AUDIO_MEDIA_FILE_2}" -c copy "${DIR}/${VA_MEDIA_FILE_2}" -y -hide_banner -loglevel panic || ( echo "\033[1m Mux video 2 failed\033[0m" && exit 1 )
+	ffmpeg -i "${DIR}/${VIDEO_MEDIA_FILE_1}" -i "${DIR}/${AUDIO_MEDIA_FILE_1}" -c copy "${DIR}/${VA_MEDIA_FILE_1}" -y -hide_banner -loglevel panic || ( echo -e "\033[1m Mux video 1 failed\033[0m" && exit 1 )
+	ffmpeg -i "${DIR}/${VIDEO_MEDIA_FILE_2}" -i "${DIR}/${AUDIO_MEDIA_FILE_2}" -c copy "${DIR}/${VA_MEDIA_FILE_2}" -y -hide_banner -loglevel panic || ( echo -e "\033[1m Mux video 2 failed\033[0m" && exit 1 )
 	#ffmpeg -i "${DIR}/${VA_MEDIA_FILE_1}" -i "${DIR}/${VA_MEDIA_FILE_2}"  -filter_complex "[0]pad=iw+5:color=black[left];[left][1]hstack=inputs=2" "${DIR}/${OUTPUT_FILE}" -y -hide_banner -loglevel panic
     ffmpeg -i "${DIR}/${VA_MEDIA_FILE_1}" -i "${DIR}/${VA_MEDIA_FILE_2}" -filter_complex "[0:v]scale=480:640,setsar=1[l];[1:v]scale=480:640,setsar=1[r];[l][r]hstack;[0][1]amix" -vsync 0 "${DIR}/${OUTPUT_FILE}" -y -hide_banner -loglevel panic
 
 	# remove unused files
 	rm "${DIR}/${VIDEO_MJR_FILE_1}" "${DIR}/${AUDIO_MJR_FILE_1}" "${DIR}/${VIDEO_MJR_FILE_2}" "${DIR}/${AUDIO_MJR_FILE_2}" "${DIR}/${VA_MEDIA_FILE_1}" "${DIR}/${VA_MEDIA_FILE_2}" || ( echo "\033[1mRemove mjr files and mux videos failed \033[0m" && exit 1 )
-    [ "${AUDIO_MEDIA_FILE_1}" != "${SAMPLE_AUDIO_FILE}" ] && (rm "${DIR}/${AUDIO_MEDIA_FILE_1}" || ( echo "\033[1m Remove audio media 1 failed\033[0m" && exit 1 ))
-    [ "${VIDEO_MEDIA_FILE_1}" != "${SAMPLE_VIDEO_FILE}" ] && (rm "${DIR}/${VIDEO_MEDIA_FILE_1}" || ( echo "\033[1m Remove video media 1 failed\033[0m" && exit 1 ))
-    [ "${AUDIO_MEDIA_FILE_2}" != "${SAMPLE_AUDIO_FILE}" ] && (rm "${DIR}/${AUDIO_MEDIA_FILE_2}" || ( echo "\033[1m Remove audio media 2 failed\033[0m" && exit 1 ))
-    [ "${VIDEO_MEDIA_FILE_2}" != "${SAMPLE_VIDEO_FILE}" ] && (rm "${DIR}/${VIDEO_MEDIA_FILE_2}" || ( echo "\033[1m Remove video media 2 failed\033[0m" && exit 1 ))
+    [ "${AUDIO_MEDIA_FILE_1}" != "${SAMPLE_AUDIO_FILE}" ] && (rm "${DIR}/${AUDIO_MEDIA_FILE_1}" || ( echo -e "\033[1m Remove audio media 1 failed\033[0m" && exit 1 ))
+    [ "${VIDEO_MEDIA_FILE_1}" != "${SAMPLE_VIDEO_FILE}" ] && (rm "${DIR}/${VIDEO_MEDIA_FILE_1}" || ( echo -e "\033[1m Remove video media 1 failed\033[0m" && exit 1 ))
+    [ "${AUDIO_MEDIA_FILE_2}" != "${SAMPLE_AUDIO_FILE}" ] && (rm "${DIR}/${AUDIO_MEDIA_FILE_2}" || ( echo -e "\033[1m Remove audio media 2 failed\033[0m" && exit 1 ))
+    [ "${VIDEO_MEDIA_FILE_2}" != "${SAMPLE_VIDEO_FILE}" ] && (rm "${DIR}/${VIDEO_MEDIA_FILE_2}" || ( echo -e "\033[1m Remove video media 2 failed\033[0m" && exit 1 ))
 	# echo -e "\033[Finished... \033[0m"
     exit 0
 fi 

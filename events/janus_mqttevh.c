@@ -1185,21 +1185,24 @@ static void *janus_mqttevh_handler(void *data) {
 		} else {
 			JANUS_LOG(LOG_WARN, "Can't get event label or name\n");
 		}
+		json_t *data = NULL; 
 		switch(type) {
-			case JANUS_EVENT_TYPE_PLUGIN:{
-				if(!g_atomic_int_get(&stopping)) {
-					/* Convert event to string */
-						json_t *packet = json_object();
-						json_t *data = json_object(); 
-						json_object_set(data, "janus", json_string("event"));
-						json_object_set(data, "event", json_object_get(json_object_get(event, "event"), "data"));
-						json_object_set(packet, "data", data);
-						janus_mqttevh_send_message(ctx, ctx->publish.topic, packet);
-					}
+			case JANUS_EVENT_TYPE_PLUGIN:{			
+				/* Convert event to string */
+					data = json_object_get(json_object_get(event, "event"), "data");				
 				}
 				break;
+			case JANUS_EVENT_TYPE_WEBRTC: {
+				json_t *body = json_object_get(event, "event");	
+				if (json_object_get(body, "name")){			
+					data = body;
+				}
+			}
 		}
-		JANUS_LOG(LOG_VERB, "Debug: Thread done publishing MQTT Publish event on %s\n", ctx->addevent ? topicbuf : ctx->publish.topic);
+		if (data){
+			janus_mqttevh_send_message(ctx, ctx->publish.topic, data);
+			JANUS_LOG(LOG_VERB, "Debug: Thread done publishing MQTT Publish event on %s\n", ctx->addevent ? topicbuf : ctx->publish.topic);
+		}
 	}
 	JANUS_LOG(LOG_VERB, "Leaving MQTTEventHandler handler thread\n");
 	return NULL;

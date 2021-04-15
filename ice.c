@@ -692,22 +692,21 @@ static void janus_ice_notify_media(janus_ice_handle *handle, gboolean video, gbo
 	janus_session *session = (janus_session *)handle->session;
 	if(session == NULL)
 		return;
-	json_t *packet = json_object();
-	json_object_set_new(packet, "janus", json_string("event"));
-	json_object_set_new(packet, "session_id", json_integer(session->session_id));
-	json_t *event = json_object();
-	json_object_set_new(event, "name", json_string("media"));
-	json_object_set_new(event, "handle_id", json_integer(handle->handle_id));
-	json_object_set_new(event, "type", json_string(video ? "video" : "audio"));
-	json_object_set_new(event, "receiving", up ? json_true() : json_false());
-	if(!up && no_media_timer > 1)
-		json_object_set_new(event, "seconds", json_integer(no_media_timer));
-	json_object_set_new(packet, "event", event);
 	/* Send the event */
 	JANUS_LOG(LOG_VERB, "[%"SCNu64"] Sending event to transport...\n", handle->handle_id);
-	janus_session_notify_event(session, packet);
 	/* Notify event handlers as well */
-	
+	if(janus_events_is_enabled()) {
+		json_t *event = json_object();
+		json_object_set_new(event, "name", json_string("media"));
+		json_object_set_new(event, "session_id", json_integer(session->session_id));
+		json_object_set_new(event, "handle_id", json_integer(handle->handle_id));
+		json_object_set_new(event, "type", json_string(video ? "video" : "audio"));
+		json_object_set_new(event, "receiving", up ? json_true() : json_false());
+		if(!up && no_media_timer > 1)
+			json_object_set_new(event, "seconds", json_integer(no_media_timer));
+		janus_events_notify_handlers(JANUS_EVENT_TYPE_WEBRTC, JANUS_EVENT_SUBTYPE_WEBRTC_STATE,
+		session->session_id, handle->handle_id, handle->opaque_id, event);
+	}	
 }
 
 void janus_ice_notify_hangup(janus_ice_handle *handle, const char *reason) {
@@ -732,9 +731,10 @@ void janus_ice_notify_hangup(janus_ice_handle *handle, const char *reason) {
 	/* Notify event handlers as well */
 	if(janus_events_is_enabled()) {
 		json_t *info = json_object();
-		json_object_set_new(info, "connection", json_string("hangup"));
-		if(reason != NULL)
-			json_object_set_new(info, "reason", json_string(reason));
+		json_object_set_new(info, "name", json_string("hangup"));
+		json_object_set_new(info, "session_id", json_integer(session->session_id));
+		json_object_set_new(info, "call_id", json_string(handle->call_id));
+		json_object_set_new(info, "handle_id", json_integer(handle->handle_id));		
 		janus_events_notify_handlers(JANUS_EVENT_TYPE_WEBRTC, JANUS_EVENT_SUBTYPE_WEBRTC_STATE,
 			session->session_id, handle->handle_id, handle->opaque_id, info);
 	}
@@ -4976,8 +4976,11 @@ void janus_ice_dtls_handshake_done(janus_ice_handle *handle, janus_ice_component
 	/* Notify event handlers as well */
 	if(janus_events_is_enabled()) {
 		json_t *info = json_object();
-		json_object_set_new(info, "connection", json_string("webrtcup"));
+		json_object_set_new(info, "name", json_string("webrtcup"));
+		json_object_set_new(info, "session_id", json_integer(session->session_id));
+		json_object_set_new(info, "call_id", json_string(handle->call_id));
+		json_object_set_new(info, "handle_id", json_integer(handle->handle_id));
 		janus_events_notify_handlers(JANUS_EVENT_TYPE_WEBRTC, JANUS_EVENT_SUBTYPE_WEBRTC_STATE,
-			session->session_id, handle->handle_id, handle->opaque_id, info);
+		session->session_id, handle->handle_id, handle->opaque_id, info);
 	}
 }

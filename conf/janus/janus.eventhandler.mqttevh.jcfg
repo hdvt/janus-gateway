@@ -27,7 +27,7 @@ general: {
 	#disconnect_timeout = 100		# Seconds to wait before destroying client
 	#username = "guest"				# Username for authentication (default: no authentication)
 	#password = "guest"				# Password for authentication (default: no authentication)
-	topic = "bangtv2.media.outgoing"		# Base topic (default: /janus/events)
+	topic = "bangtv2.media.event"		# Base topic (default: /janus/events)
 	addevent = false				# Whether we should add the event type to the base topic
 
 	# Initial message sent to status topic

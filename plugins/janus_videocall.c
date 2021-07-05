@@ -470,10 +470,13 @@ static void janus_videocall_record_free(janus_videocall_record *record)
 {
 	if (!record || record == &exit_record_event)
 		return;
-
-	g_free(record->call_id);
-	record->call_id = NULL;
-	if (record->video_1)
+	
+	if (record->call_id)
+	{
+		g_free(record->call_id);
+		record->call_id = NULL;
+	}
+	if (record->video && record->video_1)
 	{
 		g_free(record->video_1);
 		record->video_1 = NULL;
@@ -483,7 +486,7 @@ static void janus_videocall_record_free(janus_videocall_record *record)
 		g_free(record->audio_1);
 		record->audio_1 = NULL;
 	}
-	if (record->video_2)
+	if (record->video && record->video_2)
 	{
 		g_free(record->video_2);
 		record->video_2 = NULL;
@@ -1881,7 +1884,7 @@ static void* janus_videocall_handler(void* data) {
 static void *janus_videocall_record_handler(void *data, void *user_data)
 {
 	JANUS_LOG(LOG_VERB, "Joining VideoCall record handler thread...\n");
-	janus_videocall_record *record = (janus_videocall_record*)data;
+	janus_videocall_record *record = (janus_videocall_record *)data;
 	JANUS_LOG(LOG_INFO, "Processing the record of call %s\n", record->call_id);
 	int error_code = 0;
 	char error_cause[512];
@@ -1901,30 +1904,34 @@ static void *janus_videocall_record_handler(void *data, void *user_data)
 	{
 		JANUS_LOG(LOG_VERB, "Audio mjr 1: %s\n", record->audio_1);
 		JANUS_LOG(LOG_VERB, "Video mjr 1: %s\n", record->audio_2);
-		record_script = g_strdup_printf("bash record.sh -t a -d %s -v1 %s -v2 %s -o %s", recording_dir, record->audio_1, record->audio_2, record->call_id);
+		record_script = g_strdup_printf("bash record.sh -t a -d %s -a1 %s -a2 %s -o %s", recording_dir, record->audio_1, record->audio_2, record->call_id);
 	}
 	JANUS_LOG(LOG_VERB, "Excuting shell script: %s\n", record_script);
 	int error = system(record_script);
-	json_t* event = json_object();
-	if (error == 0){
+	json_t *event = json_object();
+	if (error == 0)
+	{
 		JANUS_LOG(LOG_INFO, "Record call %s successfully!\n", record->call_id);
-		if (notify_events && gateway->events_is_enabled()) {
+		if (notify_events && gateway->events_is_enabled())
+		{
 			json_object_set_new(event, "name", json_string("record"));
 			json_object_set_new(event, "call_id", json_string(record->call_id));
 			json_object_set_new(event, "status", json_string("success"));
 			json_object_set_new(event, "url", json_string(record->call_id));
 			gateway->notify_event(&janus_videocall_plugin, NULL, event);
-		}			
+		}
 	}
-	else {
+	else
+	{
 		JANUS_LOG(LOG_ERR, "Record call %s failed...\n %d", record->call_id, error);
-		if (notify_events && gateway->events_is_enabled()) {
+		if (notify_events && gateway->events_is_enabled())
+		{
 			json_object_set_new(event, "name", json_string("record"));
 			json_object_set_new(event, "call_id", json_string(record->call_id));
 			json_object_set_new(event, "status", json_string("failed"));
 			gateway->notify_event(&janus_videocall_plugin, NULL, event);
-		}	
+		}
 	}
-	janus_videocall_record_free(record);	
+	janus_videocall_record_free(record);
 	JANUS_LOG(LOG_VERB, "VideoCall record handler thread has stopped...\n");
 }

@@ -129,7 +129,7 @@ if [ "${TYPE}" = "v" ]; then
 
 	ffmpeg -i "${DIR}/${VIDEO_MEDIA_FILE_1}" -i "${DIR}/${AUDIO_MEDIA_FILE_1}" -c copy "${DIR}/${VA_MEDIA_FILE_1}" -y -hide_banner -loglevel panic || ( echo -e "\033[1m Mux video 1 failed\033[0m" && exit 1 )
 	ffmpeg -i "${DIR}/${VIDEO_MEDIA_FILE_2}" -i "${DIR}/${AUDIO_MEDIA_FILE_2}" -c copy "${DIR}/${VA_MEDIA_FILE_2}" -y -hide_banner -loglevel panic || ( echo -e "\033[1m Mux video 2 failed\033[0m" && exit 1 )
-	#ffmpeg -i "${DIR}/${VA_MEDIA_FILE_1}" -i "${DIR}/${VA_MEDIA_FILE_2}"  -filter_complex "[0]pad=iw+5:color=black[left];[left][1]hstack=inputs=2" "${DIR}/${OUTPUT_FILE}" -y -hide_banner -loglevel panic
+	ffmpeg -i "${DIR}/${VA_MEDIA_FILE_1}" -i "${DIR}/${VA_MEDIA_FILE_2}"  -filter_complex "[0]pad=iw+5:color=black[left];[left][1]hstack=inputs=2" "${DIR}/${OUTPUT_FILE}" -y -hide_banner -loglevel panic
     ffmpeg -i "${DIR}/${VA_MEDIA_FILE_1}" -i "${DIR}/${VA_MEDIA_FILE_2}" -filter_complex "[0:v]scale=480:640,setsar=1[l];[1:v]scale=480:640,setsar=1[r];[l][r]hstack;[0][1]amix" -vsync 0 "${DIR}/${OUTPUT_FILE}" -y -hide_banner -loglevel panic
 
 	# remove unused files
@@ -158,8 +158,8 @@ if [ "${TYPE}" = "a" ]; then
 	OUTPUT_FILE="${OUTPUT_NAME}.mp3"
     
 	# PROCESS
-	janus-pp-rec "${DIR}/${AUDIO_MJR_FILE_1}" "${DIR}/${AUDIO_MEDIA_FILE_1}" -d 0 || exit 1
-	janus-pp-rec "${DIR}/${AUDIO_MJR_FILE_2}" "${DIR}/${AUDIO_MEDIA_FILE_2}" -d 0 || exit 1
+	janus-pp-rec "${DIR}/${AUDIO_MJR_FILE_1}" "${DIR}/${AUDIO_MEDIA_FILE_1}" -d 0 || ( echo -e "\033[1m Convert audio mjr 2 failed\033[0m" && exit 1 )
+	janus-pp-rec "${DIR}/${AUDIO_MJR_FILE_2}" "${DIR}/${AUDIO_MEDIA_FILE_2}" -d 0 || ( echo -e "\033[1m Convert audio mjr 2 failed\033[0m" && exit 1 )
     if [ ! -f "${DIR}/${AUDIO_MEDIA_FILE_1}" ];
     then
         AUDIO_MEDIA_FILE_1="${SAMPLE_AUDIO_FILE}"
@@ -169,11 +169,11 @@ if [ "${TYPE}" = "a" ]; then
         AUDIO_MEDIA_FILE_2="${SAMPLE_AUDIO_FILE}"
     fi
    
-	ffmpeg -i "${DIR}/${AUDIO_MEDIA_FILE_1}"  -i "${DIR}/${AUDIO_MEDIA_FILE_2}" -filter_complex amerge "${DIR}/${OUTPUT_FILE}" -y -hide_banner -loglevel panic || exit 1
+	ffmpeg -i "${DIR}/${AUDIO_MEDIA_FILE_1}"  -i "${DIR}/${AUDIO_MEDIA_FILE_2}" -filter_complex amerge "${DIR}/${OUTPUT_FILE}" -y -hide_banner -loglevel panic || ( echo -e "\033[1m Mux video 1 failed\033[0m" && exit 1 )
 	# remove unused files
-	rm "${DIR}/${AUDIO_MJR_FILE_1}" "${DIR}/${AUDIO_MEDIA_FILE_1}" "${DIR}/${AUDIO_MJR_FILE_2}" "${DIR}/${AUDIO_MEDIA_FILE_2}" || exit 1  
-    [ "${AUDIO_MEDIA_FILE_1}" != "${SAMPLE_AUDIO_FILE}" ] && rm "${AUDIO_MEDIA_FILE_1}" || exit 1
-    [ "${AUDIO_MEDIA_FILE_2}" != "${SAMPLE_AUDIO_FILE}" ] && rm "${AUDIO_MEDIA_FILE_2}" || exit 1 
+	rm "${DIR}/${AUDIO_MJR_FILE_1}" "${DIR}/${AUDIO_MJR_FILE_2}" || ( echo "\033[1mRemove mjr files and mux videos failed \033[0m" && exit 1 )
+    [ "${AUDIO_MEDIA_FILE_1}" != "${SAMPLE_AUDIO_FILE}" ] && (rm "${DIR}/${AUDIO_MEDIA_FILE_1}" || ( echo -e "\033[1m Remove audio media 1 failed\033[0m" && exit 1 ))
+    [ "${AUDIO_MEDIA_FILE_2}" != "${SAMPLE_AUDIO_FILE}" ] && (rm "${DIR}/${AUDIO_MEDIA_FILE_2}" || ( echo -e "\033[1m Remove audio media 2 failed\033[0m" && exit 1 ))
 
     exit 0 # success
 	# echo -e "\033[Finished... \033[0m"

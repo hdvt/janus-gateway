@@ -1,6 +1,7 @@
 #!/bin/bash
 #dependency lib
 sudo apt install libmicrohttpd-dev libjansson-dev libssl-dev libsrtp2-dev libsofia-sip-ua-dev libglib2.0-dev libopus-dev libogg-dev libcurl4-openssl-dev liblua5.3-dev libconfig-dev pkg-config gengetopt libtool automake gtk-doc-tools make cmake  -y
+mkdir packages && cd packages
 #libnice
 git clone https://github.com/libnice/libnice.git
 cd libnice
@@ -10,8 +11,9 @@ git checkout 0.1.17
 #libsrtp
 cd .. && wget https://github.com/cisco/libsrtp/archive/v2.2.0.tar.gz && tar xfv v2.2.0.tar.gz
 cd libsrtp-2.2.0
-./configure --prefix=/usr --enable-openssl
-make shared_library && sudo make install
+# remove old libsrtp => sudo apt remove libsrtp2-dev
+./configure --prefix=/usr --enable-openssl #--disable-aes-gcm if --enable-openssl failed
+make shared_library && sudo make install 
 cd .. && git clone https://github.com/sctplab/usrsctp
 cd usrsctp
 ./bootstrap
@@ -31,7 +33,7 @@ cd paho.mqtt.c
 make && sudo make install
 #media-server
 cd ..
-git clone https://github.com/hdvt/media-server.git && cd media-server && git checkout develop
+#git clone https://github.com/hdvt/media-server.git && cd media-server && git checkout develop
 sh autogen.sh
 ./configure --sysconfdir=$PWD/conf
 make

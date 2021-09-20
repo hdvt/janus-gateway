@@ -44,6 +44,20 @@ admin: {
 	#publish_qos = 1					# QoS for outgoing admin messages
 }
 
+subscribe_topic: {
+	request: "bangtv2.media.request"
+	discover: "bangtv2.discover"
+}
+
+publish_topic: {
+	response: "bangtv2.com.response"
+	info: "bangtv2.com.info"
+	connect: "bangtv2.connect"
+	disconnect: "bangtv2.disconnect"
+	heartbeat: "bangtv2.heartbeat"
+}
+
+
 status: {
 	enabled = false 			# Whether status messages must be enabled (default: false)
 

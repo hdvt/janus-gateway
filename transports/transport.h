@@ -297,6 +297,9 @@ struct janus_transport_callbacks {
 	 * @param[in] plugin The transport originating the event
 	 * @param[in] event The event to notify as a Jansson json_t object */
 	void (* const notify_event)(janus_transport *plugin, void *transport, json_t *event);
+		/*! \brief Callback to get instance id of janus
+	 * \note Don't unref the event object, the core will do that for you */
+	guint64 (* const get_instance_id)(void);
 };
 
 /*! \brief The hook that transport plugins need to implement to be created from the Janus core */

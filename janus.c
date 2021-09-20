@@ -252,6 +252,7 @@ static GMainLoop* mainloop = NULL;
 
 /* Public instance name */
 static gchar* server_name = NULL;
+static guint64 server_instance_id = NULL;
 
 static json_t* janus_create_message(const char* status, uint64_t session_id, const char* transaction) {
 	json_t* msg = json_object();
@@ -552,6 +553,7 @@ gboolean janus_transport_is_api_secret_valid(janus_transport* plugin, const char
 gboolean janus_transport_is_auth_token_needed(janus_transport* plugin);
 gboolean janus_transport_is_auth_token_valid(janus_transport* plugin, const char* token);
 void janus_transport_notify_event(janus_transport* plugin, void* transport, json_t* event);
+guint64 janus_transport_get_instance_id();
 
 static janus_transport_callbacks janus_handler_transport =
 {
@@ -563,6 +565,7 @@ static janus_transport_callbacks janus_handler_transport =
 	.is_auth_token_valid = janus_transport_is_auth_token_valid,
 	.events_is_enabled = janus_events_is_enabled,
 	.notify_event = janus_transport_notify_event,
+	.get_instance_id = janus_transport_get_instance_id
 };
 static GAsyncQueue* requests = NULL;
 static janus_request exit_message;
@@ -1641,7 +1644,7 @@ int janus_process_incoming_request(janus_request* request) {
 
 		/* Schedule the session for deletion */
 		janus_session_destroy(session);
-
+		
 		/* Prepare JSON reply */
 		json_t* reply = janus_create_message("success", session_id, transaction_text);
 		/* Send the success reply */
@@ -1652,6 +1655,7 @@ int janus_process_incoming_request(janus_request* request) {
 				session_id, "destroyed", NULL);
 	}
 	else if (!strcasecmp(message_text, "detach")) {
+		
 		if (handle == NULL) {
 			/* Query is an handle-level command */
 			ret = janus_process_error(request, session_id, transaction_text, JANUS_ERROR_INVALID_REQUEST_PATH, "Unhandled request '%s' at this path", message_text);
@@ -3762,6 +3766,10 @@ void janus_transport_notify_event(janus_transport* plugin, void* transport, json
 	}
 }
 
+guint64 janus_transport_get_instance_id() {
+	return server_instance_id;
+}
+
 void janus_transport_task(gpointer data, gpointer user_data) {
 	JANUS_LOG(LOG_VERB, "Transport task pool, serving request\n");
 	janus_request* request = (janus_request*)data;
@@ -4718,6 +4726,7 @@ gint main(int argc, char* argv[])
 	if (item && item->value) {
 		server_name = g_strdup(item->value);
 	}
+	server_instance_id = janus_random_uint64();
 
 	/* Initialize logger */
 	if (janus_log_init(daemonize, use_stdout, logfile) < 0)

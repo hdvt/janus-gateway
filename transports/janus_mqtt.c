@@ -164,6 +164,20 @@ typedef struct janus_mqtt_context {
 		GArray *add_transaction_user_properties;
 #endif
 	} publish;
+
+	struct {
+		char *request;
+		char *discover;
+	} subscribe_topic;
+
+	struct {
+		char *response;
+		char *info;
+		char *connect;
+		char *disconnect;
+		char *heartbeat;
+	} publish_topic;
+
 	struct {
 		struct {
 			char *topic;
@@ -198,6 +212,8 @@ typedef struct janus_mqtt_set_add_transaction_user_property_user_data {
 } janus_mqtt_set_add_transaction_user_property_user_data;
 #endif
 
+
+
 /* Transport client methods */
 void janus_mqtt_client_connected(void *context, char *cause);
 void janus_mqtt_client_connection_lost(void *context, char *cause);
@@ -205,7 +221,7 @@ int janus_mqtt_client_message_arrived(void *context, char *topicName, int topicL
 int janus_mqtt_client_connect(janus_mqtt_context *ctx);
 int janus_mqtt_client_reconnect(janus_mqtt_context *ctx);
 int janus_mqtt_client_disconnect(janus_mqtt_context *ctx);
-int janus_mqtt_client_subscribe(janus_mqtt_context *ctx, gboolean admin);
+int janus_mqtt_client_subscribe(janus_mqtt_context *ctx, char* topic);
 int janus_mqtt_client_publish_status_message(janus_mqtt_context *ctx, char *payload);
 void janus_mqtt_client_destroy_context(janus_mqtt_context **ctx);
 /* MQTT v3.x interface callbacks */
@@ -224,7 +240,8 @@ void janus_mqtt_client_publish_admin_success(void *context, MQTTAsync_successDat
 void janus_mqtt_client_publish_admin_failure(void *context, MQTTAsync_failureData *response);
 void janus_mqtt_client_publish_status_success(void *context, MQTTAsync_successData *response);
 void janus_mqtt_client_publish_status_failure(void *context, MQTTAsync_failureData *response);
-int janus_mqtt_client_publish_message(janus_mqtt_context *ctx, char *payload, gboolean admin);
+int janus_mqtt_client_publish_message(janus_mqtt_context *ctx, char *payload, char *topic);
+
 int janus_mqtt_client_get_response_code(MQTTAsync_failureData *response);
 #ifdef MQTTVERSION_5
 /* MQTT v5 interface callbacks */
@@ -285,6 +302,12 @@ void janus_mqtt_set_proxy_transaction_user_property(gpointer item_ptr, gpointer 
 void janus_mqtt_set_add_transaction_user_property(gpointer item_ptr, gpointer user_data_ptr);
 #endif
 
+
+// heartbeat
+static volatile gint heartbeat = 0; 
+static GThread* heartbeat_thread;
+static void* janus_heartbeat_handler(void* data);
+
 int janus_mqtt_init(janus_transport_callbacks *callback, const char *config_path) {
 	if(callback == NULL || config_path == NULL) {
 		/* Invalid arguments */
@@ -320,8 +343,6 @@ int janus_mqtt_init(janus_transport_callbacks *callback, const char *config_path
 		janus_config_print(config);
 	}
 	janus_config_category *config_general = janus_config_get_create(config, NULL, janus_config_type_category, "general");
-	janus_config_category *config_admin = janus_config_get_create(config, NULL, janus_config_type_category, "admin");
-	janus_config_category *config_status = janus_config_get_create(config, NULL, janus_config_type_category, "status");
 
 	/* Handle configuration */
 	janus_config_item *url_item = janus_config_get(config, config_general, janus_config_type_item, "url");
@@ -472,16 +493,26 @@ int janus_mqtt_init(janus_transport_callbacks *callback, const char *config_path
 	}
 	if(enabled_item && enabled_item->value && janus_is_true(enabled_item->value)) {
 		janus_mqtt_api_enabled_ = TRUE;
-
+		janus_config_category *config_subscribe_topic = janus_config_get_create(config, NULL, janus_config_type_category, "subscribe_topic");
 		/* Subscribe configuration */
 		{
-			janus_config_item *topic_item = janus_config_get(config, config_general, janus_config_type_item, "subscribe_topic");
-			if(!topic_item || !topic_item->value) {
-				JANUS_LOG(LOG_FATAL, "Missing topic for incoming messages for MQTT integration...\n");
+			// request topic
+			janus_config_item *request_item = janus_config_get(config, config_subscribe_topic, janus_config_type_item, "request");
+			if(!request_item || !request_item->value) {
+				JANUS_LOG(LOG_FATAL, "Missing topic for request messages for MQTT integration...\n");
 				goto error;
 			}
-			ctx->subscribe.topic = g_strdup(topic_item->value);
-
+			char temp_text[500];
+			g_snprintf(temp_text, 500, "%s.%ld", request_item->value, ctx->gateway->get_instance_id());
+			ctx->subscribe_topic.request = g_strdup(temp_text);
+			// discover topic
+			janus_config_item *discover_item = janus_config_get(config, config_subscribe_topic, janus_config_type_item, "discover");
+			if(!discover_item || !discover_item->value) {
+				JANUS_LOG(LOG_FATAL, "Missing topic for discover messages for MQTT integration...\n");
+				goto error;
+			}
+			ctx->subscribe_topic.discover = g_strdup(discover_item->value);
+			// qos config
 			janus_config_item *qos_item = janus_config_get(config, config_general, janus_config_type_item, "subscribe_qos");
 			ctx->subscribe.qos = (qos_item && qos_item->value) ? atoi(qos_item->value) : 1;
 			if(ctx->subscribe.qos < 0) {
@@ -491,14 +522,44 @@ int janus_mqtt_init(janus_transport_callbacks *callback, const char *config_path
 		}
 
 		/* Publish configuration */
+		janus_config_category *config_publish_topic = janus_config_get_create(config, NULL, janus_config_type_category, "publish_topic");
 		{
-			janus_config_item *topic_item = janus_config_get(config, config_general, janus_config_type_item, "publish_topic");
-			if(!topic_item || !topic_item->value) {
-				JANUS_LOG(LOG_FATAL, "Missing topic for outgoing messages for MQTT integration...\n");
+			// response
+			janus_config_item *response_item = janus_config_get(config, config_publish_topic, janus_config_type_item, "response");
+			if(!response_item || !response_item->value) {
+				JANUS_LOG(LOG_FATAL, "Missing topic for response messages for MQTT integration...\n");
 				goto error;
 			}
-			ctx->publish.topic = g_strdup(topic_item->value);
-
+			ctx->publish_topic.response = g_strdup(response_item->value);
+			// info
+			janus_config_item *info_item = janus_config_get(config, config_publish_topic, janus_config_type_item, "info");
+			if(!info_item || !info_item->value) {
+				JANUS_LOG(LOG_FATAL, "Missing topic for info messages for MQTT integration...\n");
+				goto error;
+			}	
+			ctx->publish_topic.info = g_strdup(info_item->value);
+			// connect
+			janus_config_item *connect_item = janus_config_get(config, config_publish_topic, janus_config_type_item, "connect");
+			if(!connect_item || !connect_item->value) {
+				JANUS_LOG(LOG_FATAL, "Missing topic for connect messages for MQTT integration...\n");
+				goto error;
+			}			
+			ctx->publish_topic.connect = g_strdup(connect_item->value);
+			// disconnect
+			janus_config_item *disconnect_item = janus_config_get(config, config_publish_topic, janus_config_type_item, "disconnect");
+			if(!disconnect_item || !disconnect_item->value) {
+				JANUS_LOG(LOG_FATAL, "Missing topic for connect messages for MQTT integration...\n");
+				goto error;
+			}
+			ctx->publish_topic.disconnect = g_strdup(disconnect_item->value);
+			// heartbeat
+			janus_config_item *heartbeat_item = janus_config_get(config, config_publish_topic, janus_config_type_item, "heartbeat");
+			if(!heartbeat_item || !heartbeat_item->value) {
+				JANUS_LOG(LOG_FATAL, "Missing topic for heartbeat messages for MQTT integration...\n");
+				goto error;
+			}
+			ctx->publish_topic.heartbeat = g_strdup(heartbeat_item->value);
+			// qos config
 			janus_config_item *qos_item = janus_config_get(config, config_general, janus_config_type_item, "publish_qos");
 			ctx->publish.qos = (qos_item && qos_item->value) ? atoi(qos_item->value) : 1;
 			if(ctx->publish.qos < 0) {
@@ -563,94 +624,6 @@ int janus_mqtt_init(janus_transport_callbacks *callback, const char *config_path
 	}
 	janus_mutex_init(&ctx->disconnect.mutex);
 	janus_condition_init(&ctx->disconnect.cond);
-
-	/* Admin configuration */
-	janus_config_item *admin_enabled_item = janus_config_get(config, config_admin, janus_config_type_item, "admin_enabled");
-	if(admin_enabled_item == NULL) {
-		/* Try legacy property */
-		admin_enabled_item = janus_config_get(config, config_general, janus_config_type_item, "admin_enable");
-		if (admin_enabled_item && admin_enabled_item->value) {
-			JANUS_LOG(LOG_WARN, "Found deprecated 'admin_enable' property, please update it to 'admin_enabled' instead\n");
-		}
-	}
-	if(admin_enabled_item && admin_enabled_item->value && janus_is_true(admin_enabled_item->value)) {
-		janus_mqtt_admin_api_enabled_ = TRUE;
-
-		/* Admin subscribe configuration */
-		{
-			janus_config_item *topic_item = janus_config_get(config, config_admin, janus_config_type_item, "subscribe_topic");
-			if(!topic_item || !topic_item->value) {
-				JANUS_LOG(LOG_FATAL, "Missing topic for incoming admin messages for MQTT integration...\n");
-				goto error;
-			}
-			ctx->admin.subscribe.topic = g_strdup(topic_item->value);
-
-			janus_config_item *qos_item = janus_config_get(config, config_admin, janus_config_type_item, "subscribe_qos");
-			ctx->admin.subscribe.qos = (qos_item && qos_item->value) ? atoi(qos_item->value) : 1;
-			if(ctx->admin.subscribe.qos < 0) {
-				JANUS_LOG(LOG_ERR, "Invalid subscribe-qos value: %s (falling back to default)\n", qos_item->value);
-				ctx->admin.subscribe.qos = 1;
-			}
-		}
-
-		/* Admin publish configuration */
-		{
-			janus_config_item *topic_item = janus_config_get(config, config_admin, janus_config_type_item, "publish_topic");
-			if(!topic_item || !topic_item->value) {
-				JANUS_LOG(LOG_FATAL, "Missing topic for outgoing admin messages for MQTT integration...\n");
-				goto error;
-			}
-			ctx->admin.publish.topic = g_strdup(topic_item->value);
-
-			janus_config_item *qos_item = janus_config_get(config, config_admin, janus_config_type_item, "publish_qos");
-			ctx->admin.publish.qos = (qos_item && qos_item->value) ? atoi(qos_item->value) : 1;
-			if(ctx->admin.publish.qos < 0) {
-				JANUS_LOG(LOG_ERR, "Invalid publish-qos value: %s (falling back to default)\n", qos_item->value);
-				ctx->admin.publish.qos = 1;
-			}
-		}
-	} else {
-		janus_mqtt_admin_api_enabled_ = FALSE;
-		ctx->admin.subscribe.topic = NULL;
-		ctx->admin.publish.topic = NULL;
-	}
-
-	/* Status messages configuration */
-	janus_config_item *status_enabled_item = janus_config_get(config, config_status, janus_config_type_item, "enabled");
-	if(status_enabled_item && status_enabled_item->value && janus_is_true(status_enabled_item->value)) {
-		ctx->status.enabled = TRUE;
-
-		janus_config_item *status_connect_message_item = janus_config_get(config, config_status, janus_config_type_item, "connect_message");
-		if(status_connect_message_item && status_connect_message_item->value) {
-			ctx->status.connect_message = g_strdup(status_connect_message_item->value);
-		}
-
-		janus_config_item *status_disconnect_message_item = janus_config_get(config, config_status, janus_config_type_item, "disconnect_message");
-		if(status_disconnect_message_item && status_disconnect_message_item->value) {
-			ctx->status.disconnect_message = g_strdup(status_disconnect_message_item->value);
-		}
-
-		janus_config_item *status_topic_item = janus_config_get(config, config_status, janus_config_type_item, "topic");
-		if(status_topic_item && status_topic_item->value) {
-			ctx->status.topic = g_strdup(status_topic_item->value);
-		} else {
-			ctx->status.topic = g_strdup(JANUS_MQTT_DEFAULT_STATUS_TOPIC);
-		}
-
-		janus_config_item *status_qos_item = janus_config_get(config, config_status, janus_config_type_item, "qos");
-		if(status_qos_item && status_qos_item->value) {
-			ctx->status.qos = atoi(status_qos_item->value);
-			if(ctx->status.qos < 0) {
-				JANUS_LOG(LOG_ERR, "Invalid status-qos value: %s (disabling)\n", status_qos_item->value);
-				ctx->status.qos = 0;
-			}
-		}
-
-		janus_config_item *status_retain_item = janus_config_get(config, config_status, janus_config_type_item, "retain");
-		if(status_retain_item && status_retain_item->value && janus_is_true(status_retain_item->value)) {
-			ctx->status.retain = TRUE;
-		}
-	}
 
 	if(!janus_mqtt_api_enabled_ && !janus_mqtt_admin_api_enabled_) {
 		JANUS_LOG(LOG_WARN, "MQTT support disabled for both Janus and Admin API, giving up\n");
@@ -863,6 +836,7 @@ int janus_mqtt_send_message(janus_transport_session *transport, void *request_id
 		json_object_set_new(packet, "request_id", transaction);
 	else
 		return 0; // only send response message
+	json_object_set_new(packet, "instance_id", json_integer(ctx->gateway->get_instance_id()));
 	json_object_set_new(packet, "data", message);
 	// response->payload = json_dumps(packet, json_format);
 	char *payload = json_dumps(packet, json_format);
@@ -894,10 +868,10 @@ int janus_mqtt_send_message(janus_transport_session *transport, void *request_id
 		if(response_topic != NULL) g_free(response_topic);
 		MQTTProperties_free(&properties);
 	} else {
-		rc = janus_mqtt_client_publish_message(ctx, payload, admin);
+		rc = janus_mqtt_client_publish_message(ctx, payload, ctx->publish_topic.response);
 	}
 #else
-	rc = janus_mqtt_client_publish_message(ctx, payload, admin);
+	rc = janus_mqtt_client_publish_message(ctx, payload, ctx->publish_topic.response);
 #endif
 
 	if(rc != MQTTASYNC_SUCCESS) {
@@ -1071,12 +1045,17 @@ void janus_mqtt_client_connected(void *context, char *cause) {
 	JANUS_LOG(LOG_INFO, "Connected to MQTT broker: %s\n", cause);
 	janus_mqtt_context *ctx = (janus_mqtt_context *)context;
 
-	/* Subscribe to one (janus or admin) topic at the time */
+	/* Subscribe topics */
 	if(janus_mqtt_api_enabled_) {
-		JANUS_LOG(LOG_INFO, "Subscribing to MQTT topic %s\n", ctx->subscribe.topic);
-		int rc = janus_mqtt_client_subscribe(context, FALSE);
+		JANUS_LOG(LOG_INFO, "Subscribing to MQTT topic %s\n", ctx->subscribe_topic.request);
+		int rc = janus_mqtt_client_subscribe(context, ctx->subscribe_topic.request);
 		if(rc != MQTTASYNC_SUCCESS) {
-			JANUS_LOG(LOG_ERR, "Can't subscribe to MQTT topic: %s, return code: %d\n", ctx->subscribe.topic, rc);
+			JANUS_LOG(LOG_ERR, "Can't subscribe to MQTT topic: %s, return code: %d\n", ctx->subscribe_topic.request, rc);
+		}
+		JANUS_LOG(LOG_INFO, "Subscribing to MQTT topic %s\n", ctx->subscribe_topic.discover);
+		rc = janus_mqtt_client_subscribe(context, ctx->subscribe_topic.discover);
+		if(rc != MQTTASYNC_SUCCESS) {
+			JANUS_LOG(LOG_ERR, "Can't subscribe to MQTT topic: %s, return code: %d\n", ctx->subscribe_topic.discover, rc);
 		}
 	} else if(janus_mqtt_admin_api_enabled_) {
 		JANUS_LOG(LOG_INFO, "Subscribing to MQTT admin topic %s\n", ctx->admin.subscribe.topic);
@@ -1093,13 +1072,25 @@ void janus_mqtt_client_connected(void *context, char *cause) {
 		ctx->gateway->notify_event(&janus_mqtt_transport_, mqtt_session, info);
 	}
 
-	/* Send online status message */
-	if (ctx->status.enabled && ctx->status.connect_message != NULL) {
-		int rc = janus_mqtt_client_publish_status_message(ctx, ctx->status.connect_message);
+	if (ctx->publish_topic.connect) {
+		json_t *packet = json_object();
+		json_object_set_new(packet, "instance_id", json_integer(ctx->gateway->get_instance_id()));
+		char *payload = json_dumps(packet, json_format);
+		int rc = janus_mqtt_client_publish_message(ctx, payload, ctx->publish_topic.connect);
 		if (rc != MQTTASYNC_SUCCESS) {
-			JANUS_LOG(LOG_ERR, "Failed to publish connect status MQTT message, topic: %s, message: %s, return code: %d\n", ctx->status.topic, ctx->status.connect_message, rc);
+			JANUS_LOG(LOG_ERR, "Failed to publish connect MQTT message, topic: %s, message: %s, return code: %d\n", ctx->publish_topic.connect, payload, rc);
 		}
 	}
+	// hearbeat
+	GError* error = NULL;
+	g_atomic_int_set(&heartbeat, 1);
+	heartbeat_thread = g_thread_try_new("heartbeat handler", janus_heartbeat_handler, ctx, &error);
+	if (error != NULL) {
+		g_atomic_int_set(&heartbeat, 0);
+		JANUS_LOG(LOG_ERR, "Got error %d (%s) trying to launch the Heartbeat handler thread...\n",
+			error->code, error->message ? error->message : "??");
+		g_error_free(error);
+	}		
 }
 
 #ifdef MQTTVERSION_5
@@ -1120,7 +1111,7 @@ void janus_mqtt_client_disconnected5(void *context, MQTTProperties *properties, 
 void janus_mqtt_client_connection_lost(void *context, char *cause) {
 	JANUS_LOG(LOG_INFO, "MQTT connection lost cause of %s. Reconnecting...\n", cause);
 	/* Automatic reconnect */
-
+	g_atomic_int_set(&heartbeat, 0);
 	/* Notify handlers about this transport being gone */
 	janus_mqtt_context *ctx = (janus_mqtt_context *)context;
 	if(notify_events && ctx && ctx->gateway && ctx->gateway->events_is_enabled()) {
@@ -1134,44 +1125,31 @@ int janus_mqtt_client_message_arrived(void *context, char *topicName, int topicL
 	int ret = FALSE;
 	janus_mqtt_context *ctx = (janus_mqtt_context *)context;
 	gchar *topic = g_strndup(topicName, topicLen);
-	const gboolean janus = janus_mqtt_api_enabled_ && !strcasecmp(topic, ctx->subscribe.topic);
-	const gboolean admin = janus_mqtt_admin_api_enabled_ && !strcasecmp(topic, ctx->admin.subscribe.topic);
-	g_free(topic);
-
-	if((janus || admin) && message->payloadlen) {
-		JANUS_LOG(LOG_HUGE, "Receiving %s API message over MQTT: %.*s\n", admin ? "admin" : "Janus", message->payloadlen, (char*)message->payload);
-
+	#ifdef MQTTVERSION_5
+	#endif	
+	if (janus_mqtt_api_enabled_ && message->payloadlen){			
+		JANUS_LOG(LOG_HUGE, "Receiving %s API message over MQTT: %.*s\n", topic, message->payloadlen, (char*)message->payload);
 		json_error_t error;
 		json_t *root = json_loadb(message->payload, message->payloadlen, 0, &error);
-		json_t *params = json_object_get(root, "params");
-		json_t *request_id = json_object_get(root, "request_id");
-#ifdef MQTTVERSION_5
-		if(ctx->connect.mqtt_version == MQTTVERSION_5 && !admin) {
-			/* Save MQTT 5 properties copy to the state */
-			const gchar *transaction = g_strdup(json_string_value(json_object_get(root, "transaction")));
-			if(transaction == NULL) {
-				JANUS_LOG(LOG_WARN, "`transaction` is missing or not a string\n");
-				goto done;
+		if (!strcasecmp(topic, ctx->subscribe_topic.request)){
+			json_t *params = json_object_get(root, "params");
+			json_t *request_id = json_object_get(root, "request_id");
+			if ( params && json_is_object(params) && request_id && json_is_string(request_id)){
+				json_object_set_new(params, "transaction", request_id);
+				ctx->gateway->incoming_request(&janus_mqtt_transport_, mqtt_session, NULL, FALSE, params, &error);
 			}
-
-			MQTTProperties *properties = g_malloc(sizeof(MQTTProperties));
-			*properties = MQTTProperties_copy(&message->properties);
-
-			janus_mqtt_transaction_state *state = g_malloc(sizeof(janus_mqtt_transaction_state));
-			state->properties = properties;
-			state->created_at = janus_get_monotonic_time();
-
-			g_rw_lock_writer_lock(&janus_mqtt_transaction_states_lock);
-			g_hash_table_insert(janus_mqtt_transaction_states, (gpointer) transaction, (gpointer) state);
-			g_rw_lock_writer_unlock(&janus_mqtt_transaction_states_lock);
 		}
-#endif
-		if (params && json_is_object(params) && request_id && json_is_string(request_id)){
-			json_object_set_new(params, "transaction", request_id);
-			ctx->gateway->incoming_request(&janus_mqtt_transport_, mqtt_session, NULL, admin, params, &error);
+		else if (!strcasecmp(topic, ctx->subscribe_topic.discover)) {
+			json_t *packet = json_object();
+			json_object_set_new(packet, "instance_id", json_integer(ctx->gateway->get_instance_id()));
+			char *payload = json_dumps(packet, json_format);
+			int rc = janus_mqtt_client_publish_message(ctx, payload, ctx->publish_topic.info);
+			if (rc != MQTTASYNC_SUCCESS) {
+				JANUS_LOG(LOG_ERR, "Failed to publish connect MQTT message, topic: %s, message: %s, return code: %d\n", ctx->publish_topic.info, payload, rc);
+			}
 		}
 	}
-
+	g_free(topic);
 	ret = TRUE;
 
 done:
@@ -1310,13 +1288,16 @@ void janus_mqtt_client_reconnect_failure_impl(void *context, int rc) {
 }
 
 int janus_mqtt_client_disconnect(janus_mqtt_context *ctx) {
-	if (ctx->status.enabled && ctx->status.disconnect_message != NULL) {
-		int rc = janus_mqtt_client_publish_status_message(ctx, ctx->status.disconnect_message);
+	if (ctx->publish_topic.disconnect) {
+		json_t *packet = json_object();
+		json_object_set_new(packet, "instance_id", json_integer(ctx->gateway->get_instance_id()));
+		char *payload = json_dumps(packet, json_format);
+		int rc = janus_mqtt_client_publish_message(ctx, payload, ctx->publish_topic.disconnect);
 		if (rc != MQTTASYNC_SUCCESS) {
-			JANUS_LOG(LOG_ERR, "Failed to publish disconnect status MQTT message, topic: %s, message: %s, return code: %d\n", ctx->status.topic, ctx->status.disconnect_message, rc);
+			JANUS_LOG(LOG_ERR, "Failed to publish disconnect MQTT message, topic: %s, message: %s, return code: %d\n", ctx->publish_topic.disconnect, payload, rc);
 		}
 	}
-
+	g_atomic_int_set(&heartbeat, 0);
 	MQTTAsync_disconnectOptions options = MQTTAsync_disconnectOptions_initializer;
 
 #ifdef MQTTVERSION_5
@@ -1384,38 +1365,23 @@ void janus_mqtt_client_disconnect_failure_impl(void *context, int rc) {
 	janus_mutex_unlock(&ctx->disconnect.mutex);
 }
 
-int janus_mqtt_client_subscribe(janus_mqtt_context *ctx, gboolean admin) {
+int janus_mqtt_client_subscribe(janus_mqtt_context *ctx, char* topic) {
 	MQTTAsync_responseOptions options = MQTTAsync_responseOptions_initializer;
 	options.context = ctx;
-	if(admin) {
 #ifdef MQTTVERSION_5
-		if(ctx->connect.mqtt_version == MQTTVERSION_5) {
-			options.onSuccess5 = janus_mqtt_client_admin_subscribe_success5;
-			options.onFailure5 = janus_mqtt_client_admin_subscribe_failure5;
-		} else {
-			options.onSuccess = janus_mqtt_client_admin_subscribe_success;
-			options.onFailure = janus_mqtt_client_admin_subscribe_failure;
-		}
-#else
-		options.onSuccess = janus_mqtt_client_admin_subscribe_success;
-		options.onFailure = janus_mqtt_client_admin_subscribe_failure;
-#endif
-		return MQTTAsync_subscribe(ctx->client, ctx->admin.subscribe.topic, ctx->admin.subscribe.qos, &options);
+	if(ctx->connect.mqtt_version == MQTTVERSION_5) {
+		options.onSuccess5 = janus_mqtt_client_subscribe_success5;
+		options.onFailure5 = janus_mqtt_client_subscribe_failure5;
 	} else {
-#ifdef MQTTVERSION_5
-		if(ctx->connect.mqtt_version == MQTTVERSION_5) {
-			options.onSuccess5 = janus_mqtt_client_subscribe_success5;
-			options.onFailure5 = janus_mqtt_client_subscribe_failure5;
-		} else {
-			options.onSuccess = janus_mqtt_client_subscribe_success;
-			options.onFailure = janus_mqtt_client_subscribe_failure;
-		}
-#else
 		options.onSuccess = janus_mqtt_client_subscribe_success;
 		options.onFailure = janus_mqtt_client_subscribe_failure;
-#endif
-		return MQTTAsync_subscribe(ctx->client, ctx->subscribe.topic, ctx->subscribe.qos, &options);
 	}
+#else
+	options.onSuccess = janus_mqtt_client_subscribe_success;
+	options.onFailure = janus_mqtt_client_subscribe_failure;
+#endif
+	return MQTTAsync_subscribe(ctx->client, topic, ctx->subscribe.qos, &options);
+	
 }
 
 void janus_mqtt_client_subscribe_success(void *context, MQTTAsync_successData *response) {
@@ -1430,15 +1396,15 @@ void janus_mqtt_client_subscribe_success5(void *context, MQTTAsync_successData5 
 
 void janus_mqtt_client_subscribe_success_impl(void *context) {
 	janus_mqtt_context *ctx = (janus_mqtt_context *)context;
-	JANUS_LOG(LOG_INFO, "MQTT client has been successfully subscribed to MQTT topic: %s\n", ctx->subscribe.topic);
+	JANUS_LOG(LOG_INFO, "MQTT client has been successfully subscribed to MQTT topic\n");
 
 	/* Subscribe to admin topic if we haven't done it yet */
-	if(janus_mqtt_admin_api_enabled_ && (!janus_mqtt_api_enabled_ || strcasecmp(ctx->subscribe.topic, ctx->admin.subscribe.topic))) {
-		int rc = janus_mqtt_client_subscribe(context, TRUE);
-		if(rc != MQTTASYNC_SUCCESS) {
-			JANUS_LOG(LOG_ERR, "Can't subscribe to MQTT topic: %s, return code: %d\n", ctx->subscribe.topic, rc);
-		}
-	}
+	// if(janus_mqtt_admin_api_enabled_ && (!janus_mqtt_api_enabled_ || strcasecmp(ctx->subscribe.topic, ctx->admin.subscribe.topic))) {
+	// 	int rc = janus_mqtt_client_subscribe(context, TRUE);
+	// 	if(rc != MQTTASYNC_SUCCESS) {
+	// 		JANUS_LOG(LOG_ERR, "Can't subscribe to MQTT topic: %s, return code: %d\n", ctx->subscribe.topic, rc);
+	// 	}
+	// }
 }
 
 void janus_mqtt_client_subscribe_failure(void *context, MQTTAsync_failureData *response) {
@@ -1506,26 +1472,18 @@ void janus_mqtt_client_admin_subscribe_failure_impl(void *context, int rc) {
 	}
 }
 
-int janus_mqtt_client_publish_message(janus_mqtt_context *ctx, char *payload, gboolean admin) {
+
+int janus_mqtt_client_publish_message(janus_mqtt_context *ctx, char *payload, char *topic) {
 	MQTTAsync_message msg = MQTTAsync_message_initializer;
 	msg.payload = payload;
 	msg.payloadlen = strlen(payload);
 	msg.qos = ctx->publish.qos;
 	msg.retained = FALSE;
 
-	char *topic = admin ? ctx->admin.publish.topic : ctx->publish.topic;
-
 	MQTTAsync_responseOptions options = MQTTAsync_responseOptions_initializer;
 	options.context = ctx;
-
-	if(admin) {
-		options.onSuccess = janus_mqtt_client_publish_admin_success;
-		options.onFailure = janus_mqtt_client_publish_admin_failure;
-	} else {
-		options.onSuccess = janus_mqtt_client_publish_janus_success;
-		options.onFailure = janus_mqtt_client_publish_janus_failure;
-	}
-
+	options.onSuccess = janus_mqtt_client_publish_janus_success;
+	options.onFailure = janus_mqtt_client_publish_janus_failure;
 	return MQTTAsync_sendMessage(ctx->client, topic, &msg, &options);
 }
 
@@ -1753,3 +1711,19 @@ void janus_mqtt_transaction_state_free(gpointer state_ptr) {
 	g_free(state);
 }
 #endif
+
+
+static void* janus_heartbeat_handler(void* data) {
+	JANUS_LOG(LOG_INFO, "Joining Heartbeat handler thread\n");
+	while (g_atomic_int_get(&heartbeat)) {
+		json_t *packet = json_object();
+		json_object_set_new(packet, "instance_id", json_integer(context_->gateway->get_instance_id()));
+		char *payload = json_dumps(packet, json_format);
+		int rc = janus_mqtt_client_publish_message(context_, payload, context_->publish_topic.heartbeat);
+		if (rc != MQTTASYNC_SUCCESS) {
+			JANUS_LOG(LOG_ERR, "Failed to publish connect MQTT message, topic: %s, message: %s, return code: %d\n", context_->publish_topic.heartbeat, payload, rc);
+		}
+		g_usleep(1*1000000);
+	}
+	JANUS_LOG(LOG_INFO, "Stop Heartbeat handler thread\n");
+}

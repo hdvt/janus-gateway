@@ -2,5 +2,5 @@
 
 general: {
 	events = true,
-	recording_dir = "/home/bangtv2/MySpace/Working/Develop/com-server/com-server/public/recording"
+	recording_dir = "/home/bangtran/MySpace/Working/Project/ComPlatform/com-server/public/data/recording"
 }
